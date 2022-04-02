@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestNew(t *testing.T) {
+func TestGSetNew(t *testing.T) {
 	s := new(Set[string])
 	s.init()
 	if s.size() != 0 {
@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestBasic(t *testing.T) {
+func TestGSetBasic(t *testing.T) {
 	s := new(Set[string])
 	s.init()
 	s.add("a")
@@ -24,7 +24,7 @@ func TestBasic(t *testing.T) {
 	}
 }
 
-func TestInts(t *testing.T) {
+func TestGSetInts(t *testing.T) {
 
 	s := new(Set[int])
 	s.init()

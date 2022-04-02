@@ -9,6 +9,12 @@ type Set[T comparable] struct {
 	member void
 }
 
+func getSet[T comparable]() *Set[T] {
+	set := new(Set[T])
+	set.init()
+	return set
+}
+
 func (set *Set[T]) init() {
 	set.set = make(map[T]void)
 }
@@ -18,7 +24,9 @@ func (set *Set[T]) add(entry T) {
 }
 
 func (set *Set[T]) remove(entry T) {
-	delete(set.set, entry)
+	if set.contains(entry) {
+		delete(set.set, entry)
+	}
 }
 
 func (set *Set[T]) size() int {

@@ -70,8 +70,8 @@ func (sudoku *Sudoku) checkSubPuzzle(p int, q int) bool {
 		}
 	}
 	usedInSubPuzzle.remove(0)
-	fmt.Printf("checkSubPuzzle (p=%d, q=%d)\n", p, q)
-	usedInSubPuzzle.display()
+	//fmt.Printf("checkSubPuzzle (p=%d, q=%d)\n", p, q)
+	//usedInSubPuzzle.display()
 	return usedInSubPuzzle.size() <= DIGITS
 }
 
@@ -88,6 +88,7 @@ func (sudoku *Sudoku) isFullWithSize() (bool, int) {
 }
 
 func (sudoku *Sudoku) show() {
+	fmt.Println(strings.Repeat("----", PDIM+1) + "-")
 	for i := range sudoku.puzzle {
 		for j := range sudoku.puzzle[i] {
 			fmt.Printf(" %d  ", sudoku.puzzle[i][j])
@@ -129,9 +130,6 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	}
 	return true
 }
-
-// 004300209005009001070060043006002087190007400050083000600000105003508690042910300
-// 864371259325849761971265843436192587198657432257483916689734125713528694542916378
 
 func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 	if i < 0 || i > PDIM {
@@ -211,19 +209,19 @@ func (sudoku *Sudoku) solve() bool {
 func (sudoku *Sudoku) play(startRow int, startCol int) bool {
 
 	// escape hatch - a filled puzzle must be immediately checked for validity
-	fmt.Printf("Visiting (%d, %d)\n", startRow, startCol)
+	//fmt.Printf("Visiting (%d, %d)\n", startRow, startCol)
 	row, col, available := sudoku.findNextUnfilled(startRow, startCol)
-	fmt.Printf("Next available slot at (%d, %d)\n", startRow, startCol)
+	//fmt.Printf("Next available slot at (%d, %d)\n", startRow, startCol)
 	if !available {
 		return sudoku.checkPuzzleValidity()
 	}
 
 	for digit := 1; digit <= DIGITS; digit++ {
-		fmt.Printf("Trying %d at (%d, %d)\n", digit, row, col)
+		//fmt.Printf("Trying %d at (%d, %d)\n", digit, row, col)
 		if sudoku.isAllowedHere(row, col, digit) {
-			fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
+			//fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
 			sudoku.setPuzzleValue(row, col, digit)
-			sudoku.show()
+			//sudoku.show()
 			if sudoku.checkSubPuzzle(row/MDIM, col/MDIM) {
 				filled, _ := sudoku.isFullWithSize()
 				if filled {
@@ -235,7 +233,7 @@ func (sudoku *Sudoku) play(startRow int, startCol int) bool {
 					}
 				}
 			} else {
-				fmt.Printf("Subpuzzle check at (%d,  %d) failed for %d\n", row, col, digit)
+				//fmt.Printf("Subpuzzle check at (%d,  %d) failed for %d\n", row, col, digit)
 			}
 			sudoku.unsetPuzzleValue(row, col)
 		}
@@ -281,14 +279,6 @@ func main() {
 	flag.StringVar(&config.puzzle, "puzzle", config.puzzle, "puzzle to solve")
 	flag.StringVar(&config.solution, "solution", config.puzzle, "solution to expect (blank if none)")
 	flag.Parse()
-
-	//flag.IntVar(&config.showTop, "show-top", config.showTop, "show top n words")
-	//flag.IntVar(&config.minWordLength, "min-word-length", config.minWordLength, "minimum word length")
-	//flag.IntVar(&config.everySteps, "every-steps", config.everySteps, "minimum word length")
-	//flag.BoolVar(&config.ignoreCase, "ignore-case", config.ignoreCase, "treat all words as upper case")
-	//flag.Parse()
-	//driver(&config)
-
 	sudoku := getSudoku()
 
 	loaded := sudoku.loadData(config.puzzle)
@@ -297,12 +287,15 @@ func main() {
 		return
 	}
 
+	fmt.Printf("Puzzle:\n%s\n", config.puzzle)
 	sudoku.show()
 	sudoku.solve()
-	sudoku.show()
+	fmt.Println()
 
 	result := sudoku.getRepresentation()
-
+	fmt.Printf("Solution\n%s\n", result)
+	sudoku.show()
+	fmt.Println()
 	if len(config.solution) == 0 {
 		return
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,8 +28,8 @@ const (
 )
 
 type SudokuSolverConfig struct {
-	lastNWords, showTop, minWordLength, everySteps int
-	ignoreCase                                     bool
+	puzzle   string
+	solution string
 }
 
 type Sudoku struct {
@@ -58,11 +59,20 @@ func (sudoku *Sudoku) checkSubPuzzle(p int, q int) bool {
 	usedInSubPuzzle.init()
 	for i := p * MDIM; i < p*MDIM+MDIM; i++ {
 		for j := q * MDIM; j < q*MDIM+MDIM; j++ {
-			usedInSubPuzzle.add(sudoku.puzzle[i][j])
+			valAtPos := sudoku.puzzle[i][j]
+			if usedInSubPuzzle.contains(valAtPos) {
+				if valAtPos > 0 {
+					return false
+				}
+			} else {
+				usedInSubPuzzle.add(valAtPos)
+			}
 		}
 	}
 	usedInSubPuzzle.remove(0)
-	return usedInSubPuzzle.size() == DIGITS
+	fmt.Printf("checkSubPuzzle (p=%d, q=%d)\n", p, q)
+	usedInSubPuzzle.display()
+	return usedInSubPuzzle.size() <= DIGITS
 }
 
 func (sudoku *Sudoku) isFullWithSize() (bool, int) {
@@ -152,32 +162,35 @@ func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 	sudoku.puzzle[i][j] = 0
 }
 
-func (sudoku *Sudoku) loadData(text string) {
-	if len(text) < 81 {
-		return
+func (sudoku *Sudoku) loadData(text string) bool {
+	if len(text) < PDIM*PDIM {
+		return false
 	}
 	for i := range text {
 		ch := text[i : i+1]
 		digit, err := strconv.Atoi(ch)
 		if err != nil {
 			fmt.Printf("Error converting string to int %s\n", ch)
-			break
+			return false
 		}
 		row := i / 9
 		col := i % 9
 		//fmt.Printf("i = %d, j = %d, value = %s/%d\n", row, col, ch, digit)
 		sudoku.setPuzzleValue(row, col, digit)
 	}
+	return true
 }
 
 func (sudoku *Sudoku) findNextUnfilled(row int, col int) (int, int, bool) {
-	var i int
-	var j int
-	for i = row; i < PDIM; i++ {
-		for j = col; j < PDIM; j++ {
-			if sudoku.puzzle[i][j] == 0 {
-				return i, j, true
-			}
+
+	// 0 <= row < PDIM
+	// p <= col < PDIM
+
+	for pos := row*PDIM + col; pos < PDIM*PDIM; pos++ {
+		posRow := pos / PDIM
+		posCol := pos % PDIM
+		if sudoku.puzzle[posRow][posCol] == 0 {
+			return posRow, posCol, true
 		}
 	}
 	return -1, -1, false
@@ -190,8 +203,44 @@ func (sudoku *Sudoku) isAllowedHere(row int, col int, value int) bool {
 	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value))
 }
 
-func (sudoku *Sudoku) solve() {
+func (sudoku *Sudoku) solve() bool {
 
+	return sudoku.play(0, 0)
+}
+
+func (sudoku *Sudoku) play(startRow int, startCol int) bool {
+
+	// escape hatch - a filled puzzle must be immediately checked for validity
+	fmt.Printf("Visiting (%d, %d)\n", startRow, startCol)
+	row, col, available := sudoku.findNextUnfilled(startRow, startCol)
+	fmt.Printf("Next available slot at (%d, %d)\n", startRow, startCol)
+	if !available {
+		return sudoku.checkPuzzleValidity()
+	}
+
+	for digit := 1; digit <= DIGITS; digit++ {
+		fmt.Printf("Trying %d at (%d, %d)\n", digit, row, col)
+		if sudoku.isAllowedHere(row, col, digit) {
+			fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
+			sudoku.setPuzzleValue(row, col, digit)
+			sudoku.show()
+			if sudoku.checkSubPuzzle(row/MDIM, col/MDIM) {
+				filled, _ := sudoku.isFullWithSize()
+				if filled {
+					return true
+				} else {
+					solved := sudoku.play(row, col)
+					if solved {
+						return true
+					}
+				}
+			} else {
+				fmt.Printf("Subpuzzle check at (%d,  %d) failed for %d\n", row, col, digit)
+			}
+			sudoku.unsetPuzzleValue(row, col)
+		}
+	}
+	return false
 }
 
 func isSolution(puzzle string, solution string) (bool, int) {
@@ -226,15 +275,40 @@ func getDigits(text string) []int {
 }
 
 func main() {
-	fmt.Println("Sudoku Solver - working only on tests for now")
+
+	config := SudokuSolverConfig{"", ""}
+
+	flag.StringVar(&config.puzzle, "puzzle", config.puzzle, "puzzle to solve")
+	flag.StringVar(&config.solution, "solution", config.puzzle, "solution to expect (blank if none)")
+	flag.Parse()
+
+	//flag.IntVar(&config.showTop, "show-top", config.showTop, "show top n words")
+	//flag.IntVar(&config.minWordLength, "min-word-length", config.minWordLength, "minimum word length")
+	//flag.IntVar(&config.everySteps, "every-steps", config.everySteps, "minimum word length")
+	//flag.BoolVar(&config.ignoreCase, "ignore-case", config.ignoreCase, "treat all words as upper case")
+	//flag.Parse()
+	//driver(&config)
+
 	sudoku := getSudoku()
-	sudoku.loadData("004300209005009001070060043006002087190007400050083000600000105003508690042910300")
+
+	loaded := sudoku.loadData(config.puzzle)
+	if !loaded {
+		fmt.Println("Could not load puzzle. Exiting")
+		return
+	}
+
 	sudoku.show()
-	unsolved := sudoku.checkPuzzleValidity()
-	fmt.Println()
-	sudoku.loadData("864371259325849761971265843436192587198657432257483916689734125713528694542916378")
+	sudoku.solve()
 	sudoku.show()
-	solved := sudoku.checkPuzzleValidity()
-	fmt.Printf("Unsolved solution should be false (%t)\n", unsolved)
-	fmt.Printf("Solved solution should be true (%t)\n", solved)
+
+	result := sudoku.getRepresentation()
+
+	if len(config.solution) == 0 {
+		return
+	}
+	if config.solution == result {
+		fmt.Println("Puzzle and solution match.")
+	} else {
+		fmt.Println("Puzzle and solution do not match.")
+	}
 }

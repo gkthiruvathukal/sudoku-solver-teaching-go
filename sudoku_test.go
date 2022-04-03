@@ -34,6 +34,14 @@ func TestSudokuLoaderChecker(t *testing.T) {
 	if !expectedSolution {
 		t.Errorf("known puzzle and solution are not a match (position = %d)", position)
 	}
+
+	full, size := sudoku.isFullWithSize()
+	if !full {
+		t.Error("known puzzle and solution did not fill puzzle")
+	}
+	if size < PDIM*PDIM {
+		t.Errorf("full puzzle did not report correct size %d != %d", size, PDIM*PDIM)
+	}
 }
 
 func TestSetUnset(t *testing.T) {

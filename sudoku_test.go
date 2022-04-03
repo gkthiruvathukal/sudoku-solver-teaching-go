@@ -30,7 +30,7 @@ func TestSudokuLoaderChecker(t *testing.T) {
 		t.Error("known valid solution to blank puzzle should be solved")
 	}
 
-	expectedSolution, position := isSolution(puzzle, solution)
+	expectedSolution, position := checkPuzzleSolutionAlignment(puzzle, solution)
 	if !expectedSolution {
 		t.Errorf("known puzzle and solution are not a match (position = %d)", position)
 	}
@@ -39,8 +39,8 @@ func TestSudokuLoaderChecker(t *testing.T) {
 	if !full {
 		t.Error("known puzzle and solution did not fill puzzle")
 	}
-	if size < PDIM*PDIM {
-		t.Errorf("full puzzle did not report correct size %d != %d", size, PDIM*PDIM)
+	if size < PuzzleDimension*PuzzleDimension {
+		t.Errorf("full puzzle did not report correct size %d != %d", size, PuzzleDimension*PuzzleDimension)
 	}
 }
 
@@ -51,8 +51,8 @@ func TestSetUnset(t *testing.T) {
 
 	added := 0
 	for i := 0; i < len(digits); i += 4 {
-		row := i / PDIM
-		col := i % PDIM
+		row := i / PuzzleDimension
+		col := i % PuzzleDimension
 		sudoku.setPuzzleValue(row, col, digits[i])
 		added++
 		_, size := sudoku.isFullWithSize()
@@ -60,5 +60,4 @@ func TestSetUnset(t *testing.T) {
 			t.Errorf("Size mismatch %d != %d", size, added)
 		}
 	}
-
 }

@@ -3,28 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
 
-/*
-import (
-	"bufio"
-	"flag"
-	"fmt"
-	"os"
-	"regexp"
-	"sort"
-	"strings"
-)
-*/
-
-// SudokuSolverConfig is used for CLI arguments
-
 const (
-	DIGITS = 9
-	PDIM   = 9
-	MDIM   = 3
+	PuzzleDigits    = 9
+	PuzzleDimension = 9
+	NonetDimension  = 3
 )
 
 type SudokuSolverConfig struct {
@@ -33,13 +20,13 @@ type SudokuSolverConfig struct {
 }
 
 type Sudoku struct {
-	puzzle          [PDIM][PDIM]int // 0 through 9 (0 unoccupied)
-	rowUsed         [PDIM]Set[int]
-	columnUsed      [PDIM]Set[int]
+	puzzle          [PuzzleDimension][PuzzleDimension]int // 0 through 9 (0 unoccupied)
+	rowUsed         [PuzzleDimension]Set[int]
+	columnUsed      [PuzzleDimension]Set[int]
 	usedInSubPuzzle Set[int] // used to check submatrix; avoid unwanted allocations
 }
 
-// checkSubPuzzle ensures that no 0's are in the "solution"
+// "constructor" / factory
 
 func getSudoku() *Sudoku {
 	sudoku := new(Sudoku)
@@ -48,17 +35,20 @@ func getSudoku() *Sudoku {
 }
 
 func (sudoku *Sudoku) init() {
-	for i := 0; i < PDIM; i++ {
+	for i := 0; i < PuzzleDimension; i++ {
 		sudoku.rowUsed[i].init()
 		sudoku.columnUsed[i].init()
 	}
 }
 
-func (sudoku *Sudoku) checkSubPuzzle(p int, q int) bool {
+// checks nonnet to ensure there are no duplicate non-zero values
+// zeroes are permitted as long as 1..9 never duplicated
+
+func (sudoku *Sudoku) isValidNonnet(p int, q int) bool {
 	usedInSubPuzzle := &sudoku.usedInSubPuzzle
 	usedInSubPuzzle.init()
-	for i := p * MDIM; i < p*MDIM+MDIM; i++ {
-		for j := q * MDIM; j < q*MDIM+MDIM; j++ {
+	for i := p * NonetDimension; i < p*NonetDimension+NonetDimension; i++ {
+		for j := q * NonetDimension; j < q*NonetDimension+NonetDimension; j++ {
 			valAtPos := sudoku.puzzle[i][j]
 			if usedInSubPuzzle.contains(valAtPos) {
 				if valAtPos > 0 {
@@ -70,32 +60,30 @@ func (sudoku *Sudoku) checkSubPuzzle(p int, q int) bool {
 		}
 	}
 	usedInSubPuzzle.remove(0)
-	//fmt.Printf("checkSubPuzzle (p=%d, q=%d)\n", p, q)
-	//usedInSubPuzzle.display()
-	return usedInSubPuzzle.size() <= DIGITS
+	return usedInSubPuzzle.size() <= PuzzleDigits
 }
 
 func (sudoku *Sudoku) isFullWithSize() (bool, int) {
 	size := 0
-	for i := 0; i < PDIM; i++ {
-		for j := 0; j < PDIM; j++ {
+	for i := 0; i < PuzzleDimension; i++ {
+		for j := 0; j < PuzzleDimension; j++ {
 			if sudoku.puzzle[i][j] > 0 {
 				size++
 			}
 		}
 	}
-	return size == PDIM*PDIM, size
+	return size == PuzzleDimension*PuzzleDimension, size
 }
 
 func (sudoku *Sudoku) show() {
-	fmt.Println(strings.Repeat("----", PDIM+1) + "-")
+	fmt.Println(strings.Repeat("----", PuzzleDimension+1) + "-")
 	for i := range sudoku.puzzle {
 		for j := range sudoku.puzzle[i] {
 			fmt.Printf(" %d  ", sudoku.puzzle[i][j])
 		}
 		fmt.Printf(" (%d)\n", sudoku.rowUsed[i].size())
 	}
-	fmt.Println(strings.Repeat("----", PDIM+1) + "-")
+	fmt.Println(strings.Repeat("----", PuzzleDimension+1) + "-")
 	for j := range sudoku.puzzle[0] {
 		fmt.Printf("(%d) ", sudoku.columnUsed[j].size())
 	}
@@ -112,18 +100,21 @@ func (sudoku *Sudoku) getRepresentation() string {
 	return builder.String()
 }
 
+// This is used to check both solved and unsolved puzzles
+// If a puzzzle is filled and this passes, it is considered solved
+
 func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	for i := range sudoku.puzzle {
-		if sudoku.rowUsed[i].size() < PDIM {
+		if sudoku.rowUsed[i].size() < PuzzleDimension {
 			return false
 		}
-		if sudoku.columnUsed[i].size() < PDIM {
+		if sudoku.columnUsed[i].size() < PuzzleDimension {
 			return false
 		}
 	}
-	for i := 0; i < MDIM; i++ {
-		for j := 0; j < MDIM; j++ {
-			if !sudoku.checkSubPuzzle(i, j) {
+	for i := 0; i < NonetDimension; i++ {
+		for j := 0; j < NonetDimension; j++ {
+			if !sudoku.isValidNonnet(i, j) {
 				return false
 			}
 		}
@@ -132,10 +123,10 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 }
 
 func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
-	if i < 0 || i > PDIM {
+	if i < 0 || i > PuzzleDimension {
 		return
 	}
-	if j < 0 || j > PDIM {
+	if j < 0 || j > PuzzleDimension {
 		return
 	}
 
@@ -147,10 +138,10 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 }
 
 func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
-	if i < 0 || i > PDIM {
+	if i < 0 || i > PuzzleDimension {
 		return
 	}
-	if j < 0 || j > PDIM {
+	if j < 0 || j > PuzzleDimension {
 		return
 	}
 
@@ -161,32 +152,26 @@ func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 }
 
 func (sudoku *Sudoku) loadData(text string) bool {
-	if len(text) < PDIM*PDIM {
+	digits := getDigits(text)
+	if len(digits) < PuzzleDimension*PuzzleDimension {
 		return false
 	}
-	for i := range text {
-		ch := text[i : i+1]
-		digit, err := strconv.Atoi(ch)
-		if err != nil {
-			fmt.Printf("Error converting string to int %s\n", ch)
-			return false
-		}
+	for i := range digits {
+		digit := digits[i]
 		row := i / 9
 		col := i % 9
-		//fmt.Printf("i = %d, j = %d, value = %s/%d\n", row, col, ch, digit)
 		sudoku.setPuzzleValue(row, col, digit)
 	}
 	return true
 }
 
+// next to fill is always defined as the next in row-major order
+// much easier to do this by just computing (row, col) based on position of an element in row-major order
+
 func (sudoku *Sudoku) findNextUnfilled(row int, col int) (int, int, bool) {
-
-	// 0 <= row < PDIM
-	// p <= col < PDIM
-
-	for pos := row*PDIM + col; pos < PDIM*PDIM; pos++ {
-		posRow := pos / PDIM
-		posCol := pos % PDIM
+	for pos := row*PuzzleDimension + col; pos < PuzzleDimension*PuzzleDimension; pos++ {
+		posRow := pos / PuzzleDimension
+		posCol := pos % PuzzleDimension
 		if sudoku.puzzle[posRow][posCol] == 0 {
 			return posRow, posCol, true
 		}
@@ -194,7 +179,7 @@ func (sudoku *Sudoku) findNextUnfilled(row int, col int) (int, int, bool) {
 	return -1, -1, false
 }
 
-func (sudoku *Sudoku) isAllowedHere(row int, col int, value int) bool {
+func (sudoku *Sudoku) isCandidatePosition(row int, col int, value int) bool {
 	if sudoku.puzzle[row][col] != 0 {
 		return false
 	}
@@ -216,13 +201,13 @@ func (sudoku *Sudoku) play(startRow int, startCol int) bool {
 		return sudoku.checkPuzzleValidity()
 	}
 
-	for digit := 1; digit <= DIGITS; digit++ {
+	for digit := 1; digit <= PuzzleDigits; digit++ {
 		//fmt.Printf("Trying %d at (%d, %d)\n", digit, row, col)
-		if sudoku.isAllowedHere(row, col, digit) {
+		if sudoku.isCandidatePosition(row, col, digit) {
 			//fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
 			sudoku.setPuzzleValue(row, col, digit)
 			//sudoku.show()
-			if sudoku.checkSubPuzzle(row/MDIM, col/MDIM) {
+			if sudoku.isValidNonnet(row/NonetDimension, col/NonetDimension) {
 				filled, _ := sudoku.isFullWithSize()
 				if filled {
 					return true
@@ -241,7 +226,7 @@ func (sudoku *Sudoku) play(startRow int, startCol int) bool {
 	return false
 }
 
-func isSolution(puzzle string, solution string) (bool, int) {
+func checkPuzzleSolutionAlignment(puzzle string, solution string) (bool, int) {
 	if len(puzzle) != len(solution) {
 		return false, -1
 	}
@@ -272,8 +257,7 @@ func getDigits(text string) []int {
 	return digits
 }
 
-func main() {
-
+func driver() int {
 	config := SudokuSolverConfig{"", ""}
 
 	flag.StringVar(&config.puzzle, "puzzle", config.puzzle, "puzzle to solve")
@@ -281,10 +265,12 @@ func main() {
 	flag.Parse()
 	sudoku := getSudoku()
 
+	// handle --puzzle
+
 	loaded := sudoku.loadData(config.puzzle)
 	if !loaded {
 		fmt.Println("Could not load puzzle. Exiting")
-		return
+		return 1
 	}
 
 	fmt.Printf("Puzzle:\n%s\n", config.puzzle)
@@ -292,16 +278,25 @@ func main() {
 	sudoku.solve()
 	fmt.Println()
 
+	// handle --solution
+
 	result := sudoku.getRepresentation()
 	fmt.Printf("Solution\n%s\n", result)
 	sudoku.show()
 	fmt.Println()
+
 	if len(config.solution) == 0 {
-		return
+		return 0
 	}
 	if config.solution == result {
 		fmt.Println("Puzzle and solution match.")
 	} else {
 		fmt.Println("Puzzle and solution do not match.")
 	}
+	return 0
+}
+
+func main() {
+	success := driver()
+	os.Exit(success)
 }

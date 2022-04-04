@@ -21,9 +21,9 @@ type SudokuSolverConfig struct {
 
 type Sudoku struct {
 	puzzle          [PuzzleDimension][PuzzleDimension]int // 0 through 9 (0 unoccupied)
-	rowUsed         [PuzzleDimension]Set[int]
-	columnUsed      [PuzzleDimension]Set[int]
-	usedInSubPuzzle Set[int] // used to check submatrix; avoid unwanted allocations
+	rowUsed         [PuzzleDimension]Set[int]             // nz digits used in row
+	columnUsed      [PuzzleDimension]Set[int]             // nz digits used in column
+	usedInSubPuzzle Set[int]                              // used to check submatrix; avoid unwanted allocations [this could become 3x3 matrix of Set]
 }
 
 // "constructor" / factory
@@ -44,7 +44,7 @@ func (sudoku *Sudoku) init() {
 // checks nonnet to ensure there are no duplicate non-zero values
 // zeroes are permitted as long as 1..9 never duplicated
 
-func (sudoku *Sudoku) isValidNonnet(p int, q int) bool {
+func (sudoku *Sudoku) isValidNonet(p int, q int) bool {
 	usedInSubPuzzle := &sudoku.usedInSubPuzzle
 	usedInSubPuzzle.init()
 	for i := p * NonetDimension; i < p*NonetDimension+NonetDimension; i++ {
@@ -114,7 +114,7 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	}
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
-			if !sudoku.isValidNonnet(i, j) {
+			if !sudoku.isValidNonet(i, j) {
 				return false
 			}
 		}
@@ -122,11 +122,18 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	return true
 }
 
-func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
-	if i < 0 || i > PuzzleDimension {
-		return
+func inPuzzleBounds(i int, j int, dimension int) bool {
+	if i < 0 || i >= dimension {
+		return false
 	}
-	if j < 0 || j > PuzzleDimension {
+	if j < 0 || j >= dimension {
+		return false
+	}
+	return true
+}
+
+func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
+	if !inPuzzleBounds(i, j, PuzzleDimension) {
 		return
 	}
 
@@ -138,10 +145,7 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 }
 
 func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
-	if i < 0 || i > PuzzleDimension {
-		return
-	}
-	if j < 0 || j > PuzzleDimension {
+	if !inPuzzleBounds(i, j, PuzzleDimension) {
 		return
 	}
 
@@ -207,7 +211,7 @@ func (sudoku *Sudoku) play(startRow int, startCol int) bool {
 			//fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
 			sudoku.setPuzzleValue(row, col, digit)
 			//sudoku.show()
-			if sudoku.isValidNonnet(row/NonetDimension, col/NonetDimension) {
+			if sudoku.isValidNonet(row/NonetDimension, col/NonetDimension) {
 				filled, _ := sudoku.isFullWithSize()
 				if filled {
 					return true

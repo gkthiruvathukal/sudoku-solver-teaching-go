@@ -53,3 +53,32 @@ Solution
 Puzzle and solution match.
 ```
 
+# Run Tests
+
+You can run tests for added confidence (maybe?)
+
+As generics are fairly new, I created a simple--not necessarily complete--prototype *set* implementation `GSet`.
+There are tests for `GSet` and `Sudoku`.
+Some work remains but it's nearly there!
+
+```
+ go test -v
+=== RUN   TestNew
+--- PASS: TestNew (0.00s)
+=== RUN   TestFill
+--- PASS: TestFill (0.00s)
+=== RUN   TestGSetNew
+--- PASS: TestGSetNew (0.00s)
+=== RUN   TestGSetBasic
+--- PASS: TestGSetBasic (0.00s)
+=== RUN   TestGSetInts
+--- PASS: TestGSetInts (0.00s)
+=== RUN   TestSudokuRepresentation
+--- PASS: TestSudokuRepresentation (0.00s)
+=== RUN   TestSudokuLoaderChecker
+--- PASS: TestSudokuLoaderChecker (0.00s)
+=== RUN   TestSetUnset
+--- PASS: TestSetUnset (0.00s)
+PASS
+ok  	ssl.luc.edu/sudoku_solver	0.203s
+```

@@ -7,9 +7,30 @@ A Sudoku solver in Go.
 ```
 $ git clone https://gkthiruvathukal/ssolver-go
 $ go build
+$ go install
+```
+
+# Make sure ~/go/bin in PATH
+
+This is optional...
+
+```
+$ export PATH=$PATH:~/go/bin
+```
+
+
+# Check whether executable in PATH
+
+This is also optional...
+
+```
+$ which sudoku_solver
+/Users/gkt/go/bin/sudoku_solver
 ```
 
 # Try it out
+
+If you did not complete the previous steps, make sure you run `~/go/bin/sudoku_solver` or `./sudoku_solver` (if still in build directory):
 
 You might find it useful to download a set of known Sudoku puzzles from Kaggle.
 A particularly nicely done dataset can be found at https://www.kaggle.com/bryanpark/sudoku.

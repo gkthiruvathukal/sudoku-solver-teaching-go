@@ -61,3 +61,18 @@ func TestSetUnset(t *testing.T) {
 		}
 	}
 }
+
+func TestKnownSolution(t *testing.T) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	solution := "398471625126385479745629831657813942914762583832954167489537216263198754571246398"
+	sudoku := getSudoku()
+	sudoku.loadData(puzzle)
+	solved := sudoku.solve()
+	if !solved {
+		t.Errorf("Could not solve %s\n", puzzle)
+	}
+	result := sudoku.getRepresentation()
+	if result != solution {
+		t.Errorf("No match %s\n", solution)
+	}
+}

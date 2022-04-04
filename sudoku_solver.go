@@ -271,6 +271,9 @@ func driver() int {
 
 	// handle --puzzle
 
+	if len(config.puzzle) == 0 {
+		return 0
+	}
 	loaded := sudoku.loadData(config.puzzle)
 	if !loaded {
 		fmt.Println("Could not load puzzle. Exiting")

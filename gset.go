@@ -2,6 +2,10 @@ package main
 
 import "fmt"
 
+// Generic Set implementation in Go by GKT
+// As the generics framework unfolds, I'll probably move this to native Go generic libraries.
+// Nevertheless, this shows it is not too hard to build one's own using the native map
+
 type void struct{}
 
 type Set[T comparable] struct {

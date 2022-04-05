@@ -47,6 +47,8 @@ func (sudoku *Sudoku) init() {
 	}
 }
 
+// TODO: Possible refactor to make Nonet a "view" of the puzzle
+
 func (sudoku *Sudoku) getNonetSize(i int, j int) int {
 	return sudoku.nonet[i/NonetDimension][j/NonetDimension].size()
 }

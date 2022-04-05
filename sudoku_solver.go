@@ -42,12 +42,25 @@ func (sudoku *Sudoku) init() {
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
 			sudoku.nonet[i][j].init()
+			sudoku.nonet[i][j].display()
 		}
 	}
 }
 
-func (sudoku *Sudoku) getNonet(i int, j int) *Set[int] {
-	return &sudoku.nonet[i/NonetDimension][j/NonetDimension]
+func (sudoku *Sudoku) getNonetSize(i int, j int) int {
+	return sudoku.nonet[i/NonetDimension][j/NonetDimension].size()
+}
+
+func (sudoku *Sudoku) addNonetValue(i int, j int, value int) {
+	sudoku.nonet[i/NonetDimension][j/NonetDimension].add(value)
+}
+
+func (sudoku *Sudoku) removeNonetValue(i int, j int, value int) {
+	sudoku.nonet[i/NonetDimension][j/NonetDimension].remove(value)
+}
+
+func (sudoku *Sudoku) nonetContains(i int, j int, value int) bool {
+	return sudoku.nonet[i/NonetDimension][j/NonetDimension].contains(value)
 }
 
 func (sudoku *Sudoku) isFullWithSize() (bool, int) {
@@ -63,6 +76,7 @@ func (sudoku *Sudoku) isFullWithSize() (bool, int) {
 }
 
 func (sudoku *Sudoku) show() {
+	fmt.Println("Puzzle:")
 	fmt.Println(strings.Repeat("----", PuzzleDimension+1) + "-")
 	for i := range sudoku.puzzle {
 		for j := range sudoku.puzzle[i] {
@@ -73,6 +87,16 @@ func (sudoku *Sudoku) show() {
 	fmt.Println(strings.Repeat("----", PuzzleDimension+1) + "-")
 	for j := range sudoku.puzzle[0] {
 		fmt.Printf("(%d) ", sudoku.columnUsed[j].size())
+	}
+
+	fmt.Println()
+	fmt.Println()
+	fmt.Println("Nonets:")
+	for p := range sudoku.nonet {
+		for q := range sudoku.nonet[p] {
+			fmt.Printf("(%d) ", sudoku.nonet[p][q].size())
+		}
+		fmt.Println()
 	}
 	fmt.Println()
 }
@@ -98,8 +122,7 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	}
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
-			nonet := sudoku.getNonet(i, j)
-			if nonet.size() < PuzzleDimension {
+			if sudoku.getNonetSize(i, j) < PuzzleDimension {
 				return false
 			}
 		}
@@ -125,8 +148,7 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 	if value > 0 && value < 10 {
 		sudoku.rowUsed[i].add(value)
 		sudoku.columnUsed[j].add(value)
-		nonet := sudoku.getNonet(i, j)
-		nonet.add(value)
+		sudoku.addNonetValue(i, j, value)
 	}
 	sudoku.puzzle[i][j] = value
 }
@@ -139,8 +161,7 @@ func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 	value := sudoku.puzzle[i][j]
 	sudoku.rowUsed[i].remove(value)
 	sudoku.columnUsed[j].remove(value)
-	nonet := sudoku.getNonet(i, j)
-	nonet.remove(value)
+	sudoku.removeNonetValue(i, j, value)
 	sudoku.puzzle[i][j] = 0
 }
 
@@ -176,8 +197,7 @@ func (sudoku *Sudoku) isCandidatePosition(row int, col int, value int) bool {
 	if sudoku.puzzle[row][col] != 0 {
 		return false
 	}
-	nonet := sudoku.getNonet(row, col)
-	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value) || nonet.contains(value))
+	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value) || sudoku.nonetContains(row, col, value))
 }
 
 func (sudoku *Sudoku) solve() bool {
@@ -267,6 +287,7 @@ func driver() int {
 	result := sudoku.getRepresentation()
 	fmt.Printf("Solution\n%s\n", result)
 	sudoku.show()
+	fmt.Println("Nonets")
 	fmt.Println()
 
 	if len(config.solution) == 0 {

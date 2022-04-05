@@ -20,10 +20,10 @@ type SudokuSolverConfig struct {
 }
 
 type Sudoku struct {
-	puzzle          [PuzzleDimension][PuzzleDimension]int // 0 through 9 (0 unoccupied)
-	rowUsed         [PuzzleDimension]Set[int]             // nz digits used in row
-	columnUsed      [PuzzleDimension]Set[int]             // nz digits used in column
-	usedInSubPuzzle Set[int]                              // used to check submatrix; avoid unwanted allocations [this could become 3x3 matrix of Set]
+	puzzle     [PuzzleDimension][PuzzleDimension]int // 0 through 9 (0 unoccupied)
+	rowUsed    [PuzzleDimension]Set[int]             // nz digits used in row
+	columnUsed [PuzzleDimension]Set[int]             // nz digits used in column
+	nonet      [NonetDimension][NonetDimension]Set[int]
 }
 
 // "constructor" / factory
@@ -39,28 +39,15 @@ func (sudoku *Sudoku) init() {
 		sudoku.rowUsed[i].init()
 		sudoku.columnUsed[i].init()
 	}
-}
-
-// checks nonnet to ensure there are no duplicate non-zero values
-// zeroes are permitted as long as 1..9 never duplicated
-
-func (sudoku *Sudoku) isValidNonet(p int, q int) bool {
-	usedInSubPuzzle := &sudoku.usedInSubPuzzle
-	usedInSubPuzzle.init()
-	for i := p * NonetDimension; i < p*NonetDimension+NonetDimension; i++ {
-		for j := q * NonetDimension; j < q*NonetDimension+NonetDimension; j++ {
-			valAtPos := sudoku.puzzle[i][j]
-			if usedInSubPuzzle.contains(valAtPos) {
-				if valAtPos > 0 {
-					return false
-				}
-			} else {
-				usedInSubPuzzle.add(valAtPos)
-			}
+	for i := 0; i < NonetDimension; i++ {
+		for j := 0; j < NonetDimension; j++ {
+			sudoku.nonet[i][j].init()
 		}
 	}
-	usedInSubPuzzle.remove(0)
-	return usedInSubPuzzle.size() <= PuzzleDigits
+}
+
+func (sudoku *Sudoku) getNonet(i int, j int) *Set[int] {
+	return &sudoku.nonet[i/NonetDimension][j/NonetDimension]
 }
 
 func (sudoku *Sudoku) isFullWithSize() (bool, int) {
@@ -100,9 +87,6 @@ func (sudoku *Sudoku) getRepresentation() string {
 	return builder.String()
 }
 
-// This is used to check both solved and unsolved puzzles
-// If a puzzzle is filled and this passes, it is considered solved
-
 func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	for i := range sudoku.puzzle {
 		if sudoku.rowUsed[i].size() < PuzzleDimension {
@@ -114,7 +98,8 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	}
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
-			if !sudoku.isValidNonet(i, j) {
+			nonet := sudoku.getNonet(i, j)
+			if nonet.size() < PuzzleDimension {
 				return false
 			}
 		}
@@ -140,6 +125,8 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 	if value > 0 && value < 10 {
 		sudoku.rowUsed[i].add(value)
 		sudoku.columnUsed[j].add(value)
+		nonet := sudoku.getNonet(i, j)
+		nonet.add(value)
 	}
 	sudoku.puzzle[i][j] = value
 }
@@ -152,6 +139,8 @@ func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 	value := sudoku.puzzle[i][j]
 	sudoku.rowUsed[i].remove(value)
 	sudoku.columnUsed[j].remove(value)
+	nonet := sudoku.getNonet(i, j)
+	nonet.remove(value)
 	sudoku.puzzle[i][j] = 0
 }
 
@@ -187,42 +176,30 @@ func (sudoku *Sudoku) isCandidatePosition(row int, col int, value int) bool {
 	if sudoku.puzzle[row][col] != 0 {
 		return false
 	}
-	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value))
+	nonet := sudoku.getNonet(row, col)
+	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value) || nonet.contains(value))
 }
 
 func (sudoku *Sudoku) solve() bool {
-
 	return sudoku.play(0, 0)
 }
 
 func (sudoku *Sudoku) play(startRow int, startCol int) bool {
-
-	// escape hatch - a filled puzzle must be immediately checked for validity
-	//fmt.Printf("Visiting (%d, %d)\n", startRow, startCol)
 	row, col, available := sudoku.findNextUnfilled(startRow, startCol)
-	//fmt.Printf("Next available slot at (%d, %d)\n", startRow, startCol)
 	if !available {
 		return sudoku.checkPuzzleValidity()
 	}
 
 	for digit := 1; digit <= PuzzleDigits; digit++ {
-		//fmt.Printf("Trying %d at (%d, %d)\n", digit, row, col)
 		if sudoku.isCandidatePosition(row, col, digit) {
-			//fmt.Printf(" %d is viable at (%d, %d)\n", digit, row, col)
 			sudoku.setPuzzleValue(row, col, digit)
-			//sudoku.show()
-			if sudoku.isValidNonet(row/NonetDimension, col/NonetDimension) {
-				filled, _ := sudoku.isFullWithSize()
-				if filled {
-					return true
-				} else {
-					solved := sudoku.play(row, col)
-					if solved {
-						return true
-					}
-				}
+			filled, _ := sudoku.isFullWithSize()
+			if filled {
+				return true
 			} else {
-				//fmt.Printf("Subpuzzle check at (%d,  %d) failed for %d\n", row, col, digit)
+				if sudoku.play(row, col) {
+					return true
+				}
 			}
 			sudoku.unsetPuzzleValue(row, col)
 		}

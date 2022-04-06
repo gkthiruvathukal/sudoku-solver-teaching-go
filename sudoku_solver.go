@@ -47,22 +47,8 @@ func (sudoku *Sudoku) init() {
 	}
 }
 
-// TODO: Possible refactor to make Nonet a "view" of the puzzle
-
-func (sudoku *Sudoku) getNonetSize(i int, j int) int {
-	return sudoku.nonet[i/NonetDimension][j/NonetDimension].size()
-}
-
-func (sudoku *Sudoku) addNonetValue(i int, j int, value int) {
-	sudoku.nonet[i/NonetDimension][j/NonetDimension].add(value)
-}
-
-func (sudoku *Sudoku) removeNonetValue(i int, j int, value int) {
-	sudoku.nonet[i/NonetDimension][j/NonetDimension].remove(value)
-}
-
-func (sudoku *Sudoku) nonetContains(i int, j int, value int) bool {
-	return sudoku.nonet[i/NonetDimension][j/NonetDimension].contains(value)
+func (sudoku *Sudoku) getNonet(i int, j int) *Set[int] {
+	return &sudoku.nonet[i/NonetDimension][j/NonetDimension]
 }
 
 func (sudoku *Sudoku) isFullWithSize() (bool, int) {
@@ -124,7 +110,7 @@ func (sudoku *Sudoku) checkPuzzleValidity() bool {
 	}
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
-			if sudoku.getNonetSize(i, j) < PuzzleDimension {
+			if sudoku.getNonet(i, j).size() < PuzzleDimension {
 				return false
 			}
 		}
@@ -150,7 +136,7 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 	if value > 0 && value < 10 {
 		sudoku.rowUsed[i].add(value)
 		sudoku.columnUsed[j].add(value)
-		sudoku.addNonetValue(i, j, value)
+		sudoku.getNonet(i, j).add(value)
 	}
 	sudoku.puzzle[i][j] = value
 }
@@ -163,7 +149,7 @@ func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 	value := sudoku.puzzle[i][j]
 	sudoku.rowUsed[i].remove(value)
 	sudoku.columnUsed[j].remove(value)
-	sudoku.removeNonetValue(i, j, value)
+	sudoku.getNonet(i, j).remove(value)
 	sudoku.puzzle[i][j] = 0
 }
 
@@ -199,7 +185,7 @@ func (sudoku *Sudoku) isCandidatePosition(row int, col int, value int) bool {
 	if sudoku.puzzle[row][col] != 0 {
 		return false
 	}
-	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value) || sudoku.nonetContains(row, col, value))
+	return !(sudoku.rowUsed[row].contains(value) || sudoku.columnUsed[col].contains(value) || sudoku.getNonet(row, col).contains(value))
 }
 
 func (sudoku *Sudoku) solve() bool {

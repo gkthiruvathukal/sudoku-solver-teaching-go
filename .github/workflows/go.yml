@@ -23,3 +23,6 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Acceptance Test
+      run: ./go-sudoku-quick.sh

@@ -2,6 +2,10 @@
 
 A Sudoku solver in Go.
 
+# Build Status
+
+[![Go](https://github.com/gkthiruvathukal/sudoku-solver-teaching-go/actions/workflows/go.yml/badge.svg)](https://github.com/gkthiruvathukal/sudoku-solver-teaching-go/actions/workflows/go.yml)
+
 # Install
 
 ```

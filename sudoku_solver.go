@@ -285,6 +285,7 @@ func driver() int {
 		fmt.Println("Puzzle and solution match.")
 	} else {
 		fmt.Println("Puzzle and solution do not match.")
+      return 2
 	}
 	return 0
 }

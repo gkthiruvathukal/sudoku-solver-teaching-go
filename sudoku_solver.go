@@ -246,7 +246,7 @@ func getDigits(text string) []int {
 	return digits
 }
 
-func solver(puzzle string, solution string) int {
+func commandLineSolver(puzzle string, solution string) int {
 	sudoku := getSudoku()
 
 	// handle --puzzle
@@ -285,17 +285,21 @@ func solver(puzzle string, solution string) int {
 	return 0
 }
 
+func interactiveSolver(level int) int {
+	return 0
+}
+
 func main() {
 
 	solveCmd := flag.NewFlagSet("solve", flag.ExitOnError)
 	solvePuzzle := solveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
 	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
 
-	interactiveCmd := flag.NewFlagSet("interative", flag.ExitOnError)
-	interativeLevel := interactiveCmd.Int("log", 0, "log level")
+	interactiveCmd := flag.NewFlagSet("interactive", flag.ExitOnError)
+	interactiveLevel := interactiveCmd.Int("log", 0, "log level")
 
 	if len(os.Args) < 2 {
-		fmt.Println("expected 'foo' or 'bar' subcommands")
+		fmt.Println("expected subcommands: solve, interactive")
 		os.Exit(1)
 	}
 
@@ -306,11 +310,12 @@ func main() {
 		fmt.Println("subcommand 'solve'")
 		fmt.Println("  puzzle:", *solvePuzzle)
 		fmt.Println("  solution:", *solveSolution)
-		success = solver(*solvePuzzle, *solveSolution)
+		success = commandLineSolver(*solvePuzzle, *solveSolution)
 	case "interactive":
 		interactiveCmd.Parse(os.Args[2:])
-		fmt.Println("  level:", *interativeLevel)
+		fmt.Println("  level:", *interactiveLevel)
 		fmt.Println("  tail:", interactiveCmd.Args())
+		success = interactiveSolver(*interactiveLevel)
 	default:
 		fmt.Println("expected 'solve' or 'interactive' subcommands")
 		os.Exit(1)

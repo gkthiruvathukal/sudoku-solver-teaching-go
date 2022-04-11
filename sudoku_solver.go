@@ -246,26 +246,21 @@ func getDigits(text string) []int {
 	return digits
 }
 
-func driver() int {
-	config := SudokuSolverConfig{"", ""}
-
-	flag.StringVar(&config.puzzle, "puzzle", config.puzzle, "puzzle to solve")
-	flag.StringVar(&config.solution, "solution", config.puzzle, "solution to expect (blank if none)")
-	flag.Parse()
+func solver(puzzle string, solution string) int {
 	sudoku := getSudoku()
 
 	// handle --puzzle
 
-	if len(config.puzzle) == 0 {
+	if len(puzzle) == 0 {
 		return 0
 	}
-	loaded := sudoku.loadData(config.puzzle)
+	loaded := sudoku.loadData(puzzle)
 	if !loaded {
 		fmt.Println("Could not load puzzle. Exiting")
 		return 1
 	}
 
-	fmt.Printf("Puzzle:\n%s\n", config.puzzle)
+	fmt.Printf("Puzzle:\n%s\n", puzzle)
 	sudoku.show()
 	sudoku.solve()
 	fmt.Println()
@@ -278,19 +273,47 @@ func driver() int {
 	fmt.Println("Nonets")
 	fmt.Println()
 
-	if len(config.solution) == 0 {
+	if len(solution) == 0 {
 		return 0
 	}
-	if config.solution == result {
+	if solution == result {
 		fmt.Println("Puzzle and solution match.")
 	} else {
 		fmt.Println("Puzzle and solution do not match.")
-      return 2
+		return 2
 	}
 	return 0
 }
 
 func main() {
-	success := driver()
+
+	solveCmd := flag.NewFlagSet("solve", flag.ExitOnError)
+	solvePuzzle := solveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
+	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
+
+	interactiveCmd := flag.NewFlagSet("interative", flag.ExitOnError)
+	interativeLevel := interactiveCmd.Int("log", 0, "log level")
+
+	if len(os.Args) < 2 {
+		fmt.Println("expected 'foo' or 'bar' subcommands")
+		os.Exit(1)
+	}
+
+	success := 0
+	switch os.Args[1] {
+	case "solve":
+		solveCmd.Parse(os.Args[2:])
+		fmt.Println("subcommand 'solve'")
+		fmt.Println("  puzzle:", *solvePuzzle)
+		fmt.Println("  solution:", *solveSolution)
+		success = solver(*solvePuzzle, *solveSolution)
+	case "interactive":
+		interactiveCmd.Parse(os.Args[2:])
+		fmt.Println("  level:", *interativeLevel)
+		fmt.Println("  tail:", interactiveCmd.Args())
+	default:
+		fmt.Println("expected 'solve' or 'interactive' subcommands")
+		os.Exit(1)
+	}
 	os.Exit(success)
 }

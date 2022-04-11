@@ -285,7 +285,8 @@ func commandLineSolver(puzzle string, solution string) int {
 	return 0
 }
 
-func interactiveSolver(level int) int {
+func interactiveSolver(puzzle string, solution string, filename string) int {
+	fmt.Printf("Coming soon: %s, %s, %s\n", puzzle, solution, filename)
 	return 0
 }
 
@@ -296,7 +297,10 @@ func main() {
 	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
 
 	interactiveCmd := flag.NewFlagSet("interactive", flag.ExitOnError)
-	interactiveLevel := interactiveCmd.Int("log", 0, "log level")
+	interactivePuzzle := interactiveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
+	interactiveSolution := interactiveCmd.String("solution", "", "puzzle to solve (81 characters)")
+	interactiveStateFile := interactiveCmd.String("filename", ".sudoku-state", "basename of checkpoint filename")
+	// Other flags TBD.
 
 	if len(os.Args) < 2 {
 		fmt.Println("expected subcommands: solve, interactive")
@@ -313,9 +317,11 @@ func main() {
 		success = commandLineSolver(*solvePuzzle, *solveSolution)
 	case "interactive":
 		interactiveCmd.Parse(os.Args[2:])
-		fmt.Println("  level:", *interactiveLevel)
-		fmt.Println("  tail:", interactiveCmd.Args())
-		success = interactiveSolver(*interactiveLevel)
+		fmt.Println("subcommand 'interactive'")
+		fmt.Println("  puzzle:", *interactivePuzzle)
+		fmt.Println("  solution:", *interactiveSolution)
+		fmt.Println("  solution:", *interactiveStateFile)
+		success = interactiveSolver(*interactivePuzzle, *interactiveSolution, *interactiveStateFile)
 	default:
 		fmt.Println("expected 'solve' or 'interactive' subcommands")
 		os.Exit(1)

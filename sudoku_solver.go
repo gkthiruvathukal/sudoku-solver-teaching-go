@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -286,7 +287,74 @@ func commandLineSolver(puzzle string, solution string) int {
 }
 
 func interactiveSolver(puzzle string, solution string, filename string) int {
-	fmt.Printf("Coming soon: %s, %s, %s\n", puzzle, solution, filename)
+	sudoku := getSudoku()
+	if len(puzzle) == 0 {
+		return 1 // TODO: Make constants for various exit states
+	}
+	loaded := sudoku.loadData(puzzle)
+	if !loaded {
+		fmt.Println("Could not load Sudoku puzzle. Exiting")
+		return 2
+	}
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	setCmd := flag.NewFlagSet("set", flag.ExitOnError)
+	var x, y, value int
+	setCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
+	setCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
+	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]]")
+
+	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
+	getCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
+	getCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
+
+	fs := make(map[string]*flag.FlagSet)
+	fs["set"] = setCmd
+	fs["get"] = getCmd
+
+	fmt.Print("> ")
+	for scanner.Scan() {
+		text := scanner.Text()
+		matches := strings.Fields(text)
+		fmt.Println("Matches array", matches)
+		switch matches[0] {
+		case "quit":
+			{
+				fmt.Println("quit - quits the interactive mode")
+				return 0
+			}
+		case "show":
+			{
+				sudoku.show()
+			}
+
+		case "solve":
+			{
+				sudoku.solve()
+			}
+
+		case "set":
+			{
+				x, y, value = -1, -1, -1
+				fs["set"].Parse(matches[1:])
+				fmt.Printf("set: x = %d, y = %d, value = %d\n", x, y, value)
+				if !sudoku.isCandidatePosition(x, y, value) {
+					fmt.Printf("%d not valid at (%d, %d)", value, x, y)
+				}
+				sudoku.setPuzzleValue(x, y, value)
+			}
+		case "get":
+			{
+				x, y = -1, -1
+				fs["get"].Parse(matches[1:])
+				fmt.Printf("get: x = %d, y = %d\n", x, y)
+			}
+		}
+		fmt.Println(text)
+		fmt.Print("> ")
+	}
+
 	return 0
 }
 
@@ -311,16 +379,9 @@ func main() {
 	switch os.Args[1] {
 	case "solve":
 		solveCmd.Parse(os.Args[2:])
-		fmt.Println("subcommand 'solve'")
-		fmt.Println("  puzzle:", *solvePuzzle)
-		fmt.Println("  solution:", *solveSolution)
 		success = commandLineSolver(*solvePuzzle, *solveSolution)
 	case "interactive":
 		interactiveCmd.Parse(os.Args[2:])
-		fmt.Println("subcommand 'interactive'")
-		fmt.Println("  puzzle:", *interactivePuzzle)
-		fmt.Println("  solution:", *interactiveSolution)
-		fmt.Println("  solution:", *interactiveStateFile)
 		success = interactiveSolver(*interactivePuzzle, *interactiveSolution, *interactiveStateFile)
 	default:
 		fmt.Println("expected 'solve' or 'interactive' subcommands")

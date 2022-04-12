@@ -286,15 +286,15 @@ func commandLineSolver(puzzle string, solution string) int {
 	return 0
 }
 
-func interactiveSolver(puzzle string, solution string, filename string) int {
+func interactiveSolver(puzzle string, solution string, filename string) bool {
 	sudoku := getSudoku()
 	if len(puzzle) == 0 {
-		return 1 // TODO: Make constants for various exit states
+		return false
 	}
 	loaded := sudoku.loadData(puzzle)
 	if !loaded {
 		fmt.Println("Could not load Sudoku puzzle. Exiting")
-		return 2
+		return false
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -313,16 +313,25 @@ func interactiveSolver(puzzle string, solution string, filename string) int {
 	fs["set"] = setCmd
 	fs["get"] = getCmd
 
+	solved := false
 	fmt.Print("> ")
 	for scanner.Scan() {
 		text := scanner.Text()
 		matches := strings.Fields(text)
 		fmt.Println("Matches array", matches)
 		switch matches[0] {
+		case "status":
+			{
+				if solved {
+					fmt.Println("The puzzle is solved")
+				} else {
+					fmt.Println("The puzzle is not solveld")
+				}
+			}
 		case "quit":
 			{
-				fmt.Println("quit - quits the interactive mode")
-				return 0
+				full, _ := sudoku.isFullWithSize()
+				return full && sudoku.checkPuzzleValidity()
 			}
 		case "show":
 			{
@@ -351,11 +360,13 @@ func interactiveSolver(puzzle string, solution string, filename string) int {
 				fmt.Printf("get: x = %d, y = %d\n", x, y)
 			}
 		}
+		full, _ := sudoku.isFullWithSize()
+		solved = full && sudoku.checkPuzzleValidity()
 		fmt.Println(text)
 		fmt.Print("> ")
 	}
 
-	return 0
+	return solved
 }
 
 func main() {
@@ -382,7 +393,12 @@ func main() {
 		success = commandLineSolver(*solvePuzzle, *solveSolution)
 	case "interactive":
 		interactiveCmd.Parse(os.Args[2:])
-		success = interactiveSolver(*interactivePuzzle, *interactiveSolution, *interactiveStateFile)
+		solved := interactiveSolver(*interactivePuzzle, *interactiveSolution, *interactiveStateFile)
+		if solved {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
 	default:
 		fmt.Println("expected 'solve' or 'interactive' subcommands")
 		os.Exit(1)

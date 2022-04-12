@@ -301,6 +301,8 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 	setCmd := flag.NewFlagSet("set", flag.ExitOnError)
 	var x, y, value int
+	var name string
+
 	setCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	setCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
 	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]]")
@@ -309,16 +311,25 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 	getCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	getCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
 
+	name = ""
+	saveCmd := flag.NewFlagSet("save", flag.ExitOnError)
+	saveCmd.StringVar(&name, "name", "", "checkpoint name")
+
+	loadCmd := flag.NewFlagSet("load", flag.ExitOnError)
+	loadCmd.StringVar(&name, "name", "", "checkpoint name")
+
 	fs := make(map[string]*flag.FlagSet)
 	fs["set"] = setCmd
 	fs["get"] = getCmd
+	fs["save"] = saveCmd
+	fs["load"] = loadCmd
 
+	checkpoints := make(map[string]string)
 	solved := false
 	fmt.Print("> ")
 	for scanner.Scan() {
 		text := scanner.Text()
 		matches := strings.Fields(text)
-		fmt.Println("Matches array", matches)
 		switch matches[0] {
 		case "status":
 			{
@@ -347,9 +358,9 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 			{
 				x, y, value = -1, -1, -1
 				fs["set"].Parse(matches[1:])
-				fmt.Printf("set: x = %d, y = %d, value = %d\n", x, y, value)
 				if !sudoku.isCandidatePosition(x, y, value) {
-					fmt.Printf("%d not valid at (%d, %d)", value, x, y)
+					fmt.Printf("%d not valid at (%d, %d)\n", value, x, y)
+					break
 				}
 				sudoku.setPuzzleValue(x, y, value)
 			}
@@ -359,10 +370,38 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 				fs["get"].Parse(matches[1:])
 				fmt.Printf("get: x = %d, y = %d\n", x, y)
 			}
+		case "save":
+			{
+				name = ""
+				fs["save"].Parse(matches[1:])
+				if len(name) > 0 {
+					checkpoints[name] = sudoku.getRepresentation()
+				}
+			}
+
+		case "load":
+			{
+				name = ""
+				fs["load"].Parse(matches[1:])
+				if len(name) > 0 {
+					cp := checkpoints[name]
+					fmt.Println("Loading puzzle ", cp)
+					sudoku.loadData(cp)
+				} else {
+					fmt.Println("No entry for ", name)
+				}
+			}
+		case "checkpoints":
+			{
+				fmt.Println("Checkpoints: Note that these are not in order")
+				for name, puzzle := range checkpoints {
+					fmt.Println(puzzle, "/", name)
+				}
+			}
 		}
+
 		full, _ := sudoku.isFullWithSize()
 		solved = full && sudoku.checkPuzzleValidity()
-		fmt.Println(text)
 		fmt.Print("> ")
 	}
 

@@ -336,7 +336,7 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 				if solved {
 					fmt.Println("The puzzle is solved")
 				} else {
-					fmt.Println("The puzzle is not solveld")
+					fmt.Println("The puzzle is not solved")
 				}
 			}
 		case "quit":

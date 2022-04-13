@@ -142,6 +142,13 @@ func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
 	sudoku.puzzle[i][j] = value
 }
 
+func (sudoku *Sudoku) getPuzzleValue(i int, j int) (bool, int) {
+	if !inPuzzleBounds(i, j, PuzzleDimension) {
+		return false, -1
+	}
+	return true, sudoku.puzzle[i][j]
+}
+
 func (sudoku *Sudoku) unsetPuzzleValue(i int, j int) {
 	if !inPuzzleBounds(i, j, PuzzleDimension) {
 		return
@@ -330,15 +337,29 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 	for scanner.Scan() {
 		text := scanner.Text()
 		matches := strings.Fields(text)
-		switch matches[0] {
+		cmd := ""
+		if len(matches) > 0 {
+			cmd = matches[0]
+		}
+
+		switch cmd {
 		case "status":
 			{
 				if solved {
-					fmt.Println("The puzzle is solved")
+					fmt.Println("Solved", sudoku.getRepresentation())
 				} else {
-					fmt.Println("The puzzle is not solved")
+					fmt.Println("Unsolved", sudoku.getRepresentation())
 				}
 			}
+		case "clear":
+			{
+				fmt.Println("Previous State")
+				sudoku.show()
+				sudoku.loadData(puzzle)
+				fmt.Println("New State")
+				sudoku.show()
+			}
+
 		case "quit":
 			{
 				full, _ := sudoku.isFullWithSize()
@@ -351,7 +372,12 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 		case "solve":
 			{
-				sudoku.solve()
+				solved := sudoku.solve()
+				if solved {
+					sudoku.show()
+				} else {
+					fmt.Println(`No solution based on current configuration. Try "clear". Then "solve"`)
+				}
 			}
 
 		case "set":
@@ -368,7 +394,8 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 			{
 				x, y = -1, -1
 				fs["get"].Parse(matches[1:])
-				fmt.Printf("get: x = %d, y = %d\n", x, y)
+				success, value := sudoku.getPuzzleValue(x, y)
+				fmt.Printf("get: x = %d, y = %d, value (valid=%t) = %d\n", x, y, success, value)
 			}
 		case "save":
 			{
@@ -397,6 +424,10 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 				for name, puzzle := range checkpoints {
 					fmt.Println(puzzle, "/", name)
 				}
+			}
+		default:
+			{
+				fmt.Println("unknown command", text)
 			}
 		}
 

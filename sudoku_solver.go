@@ -310,130 +310,177 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 	var x, y, value int
 	var name string
 
+	// example: set -x 0 -y 1 -value 2; will assign &x, &y, &value
 	setCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	setCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
 	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]]")
 
+	// example: get -x 0 -y 1; will assign &x, &y
 	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
 	getCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	getCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
 
+	// example: save -name "whatever"; will assign &name
 	name = ""
 	saveCmd := flag.NewFlagSet("save", flag.ExitOnError)
 	saveCmd.StringVar(&name, "name", "", "checkpoint name")
 
+	// example: load -name "whatever"; will assign &name
 	loadCmd := flag.NewFlagSet("load", flag.ExitOnError)
 	loadCmd.StringVar(&name, "name", "", "checkpoint name")
 
-	fs := make(map[string]*flag.FlagSet)
-	fs["set"] = setCmd
-	fs["get"] = getCmd
-	fs["save"] = saveCmd
-	fs["load"] = loadCmd
+	fs := map[string]*flag.FlagSet{
+		"set":  setCmd,
+		"get":  getCmd,
+		"save": saveCmd,
+		"load": loadCmd,
+	}
 
 	checkpoints := make(map[string]string)
 	solved := false
-	fmt.Print("> ")
-	for scanner.Scan() {
-		text := scanner.Text()
-		matches := strings.Fields(text)
-		cmd := ""
-		if len(matches) > 0 {
-			cmd = matches[0]
+
+	// Interpreter state
+	//   text -> current line
+	//   matches -> tokens on current line for processing flags
+	var text string
+	var matches []string
+
+	// These lambdas are use in place of a big switch statement
+
+	status := func() bool {
+		if solved {
+			fmt.Println("Solved", sudoku.getRepresentation())
+		} else {
+			fmt.Println("Unsolved", sudoku.getRepresentation())
+		}
+		return false
+	}
+
+	clear := func() bool {
+		fmt.Println("Previous State")
+		sudoku.show()
+		sudoku.loadData(puzzle)
+		fmt.Println("New State")
+		sudoku.show()
+		return false
+	}
+
+	quit := func() bool {
+		full, _ := sudoku.isFullWithSize()
+		return full && sudoku.checkPuzzleValidity()
+	}
+
+	show := func() bool {
+		sudoku.show()
+		return false
+	}
+
+	solve := func() bool {
+		solved := sudoku.solve()
+		if solved {
+			sudoku.show()
+		} else {
+			fmt.Println(`No solution based on current configuration. Try "clear". Then "solve"`)
+		}
+		return false
+	}
+
+	set := func() bool {
+		x, y, value = -1, -1, -1
+		fs["set"].Parse(matches[1:])
+		if !sudoku.isCandidatePosition(x, y, value) {
+			fmt.Printf("%d not valid at (%d, %d)\n", value, x, y)
+		} else {
+			sudoku.setPuzzleValue(x, y, value)
+		}
+		return false
+	}
+
+	get := func() bool {
+		x, y = -1, -1
+		fs["get"].Parse(matches[1:])
+		success, value := sudoku.getPuzzleValue(x, y)
+		fmt.Printf("get: x = %d, y = %d, value (valid=%t) = %d\n", x, y, success, value)
+		return false
+	}
+
+	save := func() bool {
+		name = ""
+		fs["save"].Parse(matches[1:])
+		if len(name) > 0 {
+			checkpoints[name] = sudoku.getRepresentation()
+		}
+		return false
+	}
+
+	load := func() bool {
+		name = ""
+		fs["load"].Parse(matches[1:])
+		if len(name) > 0 {
+			cp := checkpoints[name]
+			fmt.Println("Loading puzzle ", cp)
+			sudoku.loadData(cp)
+		} else {
+			fmt.Println("No entry for ", name)
+		}
+		return false
+	}
+
+	checkpoint := func() bool {
+		fmt.Println("Checkpoints: Note that these are not in order")
+		for name, puzzle := range checkpoints {
+			fmt.Println(puzzle, "/", name)
+		}
+		return false
+	}
+
+	help := func() bool {
+		fmt.Printf("To appear soon (%s)\n", text)
+		return false
+	}
+
+	commands := map[string]func() bool{
+		"set":         set,
+		"get":         get,
+		"status":      status,
+		"clear":       clear,
+		"quit":        quit,
+		"show":        show,
+		"solve":       solve,
+		"save":        save,
+		"load":        load,
+		"checkpoints": checkpoint,
+		"help":        help,
+	}
+
+	// Main interpreter loop.
+
+	for {
+		fmt.Print(">> ")
+		if !scanner.Scan() {
+			break
+		}
+		text = scanner.Text()
+		matches = strings.Fields(text)
+		if len(matches) == 0 {
+			continue
+		}
+		command := matches[0]
+		function := commands[command]
+		if function == nil {
+			fmt.Printf("%s: Unknown command\n", command)
+			continue
 		}
 
-		switch cmd {
-		case "status":
-			{
-				if solved {
-					fmt.Println("Solved", sudoku.getRepresentation())
-				} else {
-					fmt.Println("Unsolved", sudoku.getRepresentation())
-				}
-			}
-		case "clear":
-			{
-				fmt.Println("Previous State")
-				sudoku.show()
-				sudoku.loadData(puzzle)
-				fmt.Println("New State")
-				sudoku.show()
-			}
+		finished := commands[command]() // only true on "quit"
 
-		case "quit":
-			{
-				full, _ := sudoku.isFullWithSize()
-				return full && sudoku.checkPuzzleValidity()
-			}
-		case "show":
-			{
-				sudoku.show()
-			}
-
-		case "solve":
-			{
-				solved := sudoku.solve()
-				if solved {
-					sudoku.show()
-				} else {
-					fmt.Println(`No solution based on current configuration. Try "clear". Then "solve"`)
-				}
-			}
-
-		case "set":
-			{
-				x, y, value = -1, -1, -1
-				fs["set"].Parse(matches[1:])
-				if !sudoku.isCandidatePosition(x, y, value) {
-					fmt.Printf("%d not valid at (%d, %d)\n", value, x, y)
-					break
-				}
-				sudoku.setPuzzleValue(x, y, value)
-			}
-		case "get":
-			{
-				x, y = -1, -1
-				fs["get"].Parse(matches[1:])
-				success, value := sudoku.getPuzzleValue(x, y)
-				fmt.Printf("get: x = %d, y = %d, value (valid=%t) = %d\n", x, y, success, value)
-			}
-		case "save":
-			{
-				name = ""
-				fs["save"].Parse(matches[1:])
-				if len(name) > 0 {
-					checkpoints[name] = sudoku.getRepresentation()
-				}
-			}
-
-		case "load":
-			{
-				name = ""
-				fs["load"].Parse(matches[1:])
-				if len(name) > 0 {
-					cp := checkpoints[name]
-					fmt.Println("Loading puzzle ", cp)
-					sudoku.loadData(cp)
-				} else {
-					fmt.Println("No entry for ", name)
-				}
-			}
-		case "checkpoints":
-			{
-				fmt.Println("Checkpoints: Note that these are not in order")
-				for name, puzzle := range checkpoints {
-					fmt.Println(puzzle, "/", name)
-				}
-			}
-		default:
-			{
-				fmt.Println("unknown command", text)
-			}
-		}
-
+		// check state of puzzle after every command
 		full, _ := sudoku.isFullWithSize()
 		solved = full && sudoku.checkPuzzleValidity()
-		fmt.Print("> ")
+
+		if finished {
+			break
+		}
 	}
 
 	return solved

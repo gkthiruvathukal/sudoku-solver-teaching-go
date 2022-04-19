@@ -43,7 +43,7 @@ func (sudoku *Sudoku) init() {
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
 			sudoku.nonet[i][j].init()
-			sudoku.nonet[i][j].display()
+			//sudoku.nonet[i][j].display()
 		}
 	}
 }
@@ -429,6 +429,7 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 				cp := checkpoints[name]
 				if len(cp) > 0 {
 					fmt.Println("Loading puzzle: ", cp)
+					sudoku.init()
 					sudoku.loadData(cp)
 				}
 			}

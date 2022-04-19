@@ -130,6 +130,9 @@ func inPuzzleBounds(i int, j int, dimension int) bool {
 }
 
 func (sudoku *Sudoku) setPuzzleValue(i int, j int, value int) {
+	if value > PuzzleDimension {
+		return
+	}
 	if !inPuzzleBounds(i, j, PuzzleDimension) {
 		return
 	}
@@ -190,6 +193,9 @@ func (sudoku *Sudoku) findNextUnfilled(row int, col int) (int, int, bool) {
 }
 
 func (sudoku *Sudoku) isCandidatePosition(row int, col int, value int) bool {
+	if value > PuzzleDimension {
+		return false
+	}
 	if sudoku.puzzle[row][col] != 0 {
 		return false
 	}
@@ -421,10 +427,10 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 		if fs["load"].Parse(matches[1:]) == nil {
 			if len(name) > 0 {
 				cp := checkpoints[name]
-				fmt.Println("Loading puzzle ", cp)
-				sudoku.loadData(cp)
-			} else {
-				fmt.Println("No entry for ", name)
+				if len(cp) > 0 {
+					fmt.Println("Loading puzzle: ", cp)
+					sudoku.loadData(cp)
+				}
 			}
 		}
 		return false

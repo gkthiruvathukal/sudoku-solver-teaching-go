@@ -2,6 +2,19 @@
 
 A Sudoku solver in Go.
 
+This example is primarily intended to be a *pedagogic* one.
+
+Students often struggle to learn recursion. So we (@klaeufer and @gkthiruvathukal) got inspired to develop examples that show how to work with recursion.
+In this implementation of Sudoku, we create a recursive solver by recursively *playing* positions and backtracking as needed until a solution is obtained.
+
+In addition to having a solver, the game can be interactively played with a command line interface (CLI) to learn how the various methods work.
+
+The unattended solver is played by `./sudoko_solver solve --puzzle <PUZZLE>` or`./sudoko_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). 
+
+The interactive solver with a command-line interfaace is played with `./sudoku_solver interactive`. Similar to the unattended solver, you can specify `--puzzle` and `--solution`.
+
+See below for details!
+
 # Build Status
 
 [![Go](https://github.com/gkthiruvathukal/sudoku-solver-teaching-go/actions/workflows/go.yml/badge.svg)](https://github.com/gkthiruvathukal/sudoku-solver-teaching-go/actions/workflows/go.yml)
@@ -32,7 +45,7 @@ $ which sudoku_solver
 /Users/gkt/go/bin/sudoku_solver
 ```
 
-# Try it out
+# Unattended Solver
 
 If you did not complete the previous steps, make sure you run `~/go/bin/sudoku_solver` or `./sudoku_solver` (if still in build directory):
 
@@ -42,7 +55,7 @@ A particularly nicely done dataset can be found at https://www.kaggle.com/bryanp
 Here is how to test with one of the Kaggle puzzles from this dataset:
 
 ```
-$ sudoku_solver --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090  \
+$ sudoku_solver solve --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090  \
           --solution 398471625126385479745629831657813942914762583832954167489537216263198754571246398
 
 Puzzle:
@@ -77,6 +90,10 @@ Solution
 
 Puzzle and solution match.
 ```
+
+# Interactive Solver
+
+Coming soon.
 
 # Run Tests
 

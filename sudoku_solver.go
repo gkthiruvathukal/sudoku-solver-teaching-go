@@ -306,7 +306,7 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	setCmd := flag.NewFlagSet("set", flag.ExitOnError)
+	setCmd := flag.NewFlagSet("set", flag.ContinueOnError)
 	var x, y, value int
 	var name string
 
@@ -316,17 +316,17 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]]")
 
 	// example: get -x 0 -y 1; will assign &x, &y
-	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
+	getCmd := flag.NewFlagSet("get", flag.ContinueOnError)
 	getCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	getCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
 
 	// example: save -name "whatever"; will assign &name
 	name = ""
-	saveCmd := flag.NewFlagSet("save", flag.ExitOnError)
+	saveCmd := flag.NewFlagSet("save", flag.ContinueOnError)
 	saveCmd.StringVar(&name, "name", "", "checkpoint name")
 
 	// example: load -name "whatever"; will assign &name
-	loadCmd := flag.NewFlagSet("load", flag.ExitOnError)
+	loadCmd := flag.NewFlagSet("load", flag.ContinueOnError)
 	loadCmd.StringVar(&name, "name", "", "checkpoint name")
 
 	fs := map[string]*flag.FlagSet{
@@ -387,41 +387,45 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 	set := func() bool {
 		x, y, value = -1, -1, -1
-		fs["set"].Parse(matches[1:])
-		if !sudoku.isCandidatePosition(x, y, value) {
-			fmt.Printf("%d not valid at (%d, %d)\n", value, x, y)
-		} else {
-			sudoku.setPuzzleValue(x, y, value)
+		if fs["set"].Parse(matches[1:]) == nil {
+			if !sudoku.isCandidatePosition(x, y, value) {
+				fmt.Printf("%d not valid at (%d, %d)\n", value, x, y)
+			} else {
+				sudoku.setPuzzleValue(x, y, value)
+			}
 		}
 		return false
 	}
 
 	get := func() bool {
 		x, y = -1, -1
-		fs["get"].Parse(matches[1:])
-		success, value := sudoku.getPuzzleValue(x, y)
-		fmt.Printf("get: x = %d, y = %d, value (valid=%t) = %d\n", x, y, success, value)
+		if fs["get"].Parse(matches[1:]) == nil {
+			success, value := sudoku.getPuzzleValue(x, y)
+			fmt.Printf("get: x = %d, y = %d, value (valid=%t) = %d\n", x, y, success, value)
+		}
 		return false
 	}
 
 	save := func() bool {
 		name = ""
-		fs["save"].Parse(matches[1:])
-		if len(name) > 0 {
-			checkpoints[name] = sudoku.getRepresentation()
+		if fs["save"].Parse(matches[1:]) == nil {
+			if len(name) > 0 {
+				checkpoints[name] = sudoku.getRepresentation()
+			}
 		}
 		return false
 	}
 
 	load := func() bool {
 		name = ""
-		fs["load"].Parse(matches[1:])
-		if len(name) > 0 {
-			cp := checkpoints[name]
-			fmt.Println("Loading puzzle ", cp)
-			sudoku.loadData(cp)
-		} else {
-			fmt.Println("No entry for ", name)
+		if fs["load"].Parse(matches[1:]) == nil {
+			if len(name) > 0 {
+				cp := checkpoints[name]
+				fmt.Println("Loading puzzle ", cp)
+				sudoku.loadData(cp)
+			} else {
+				fmt.Println("No entry for ", name)
+			}
 		}
 		return false
 	}

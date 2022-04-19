@@ -2,7 +2,7 @@
 
 A Sudoku solver in Go.
 
-This example is primarily intended to be a *pedagogic* one.
+This example is primarily intended to be a *pedagogical* one.
 
 Students often struggle to learn recursion. So we (@klaeufer and @gkthiruvathukal) got inspired to develop examples that show how to work with recursion.
 In this implementation of Sudoku, we create a recursive solver by recursively *playing* positions and backtracking as needed until a solution is obtained.

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
+	"github.com/chzyer/readline"
 	"os"
 	"strconv"
 	"strings"
@@ -310,7 +310,7 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 		return false
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	// scanner := bufio.NewScanner(os.Stdin)
 
 	setCmd := flag.NewFlagSet("set", flag.ContinueOnError)
 	var x, y, value int
@@ -466,12 +466,33 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 	// Main interpreter loop.
 
+	// Set up readline support
+	rl, err := readline.NewEx(&readline.Config{
+		UniqueEditLine: true,
+	})
+	if err != nil {
+		fmt.Print("Readline problem")
+		return false
+	}
+	defer rl.Close()
+
+	rl.SetPrompt("<sudoku> ")
+
 	for {
-		fmt.Print(">> ")
-		if !scanner.Scan() {
+		ln := rl.Line()
+		if ln.CanContinue() {
+			continue
+		} else if ln.CanBreak() {
 			break
 		}
-		text = scanner.Text()
+
+		if ln.CanContinue() {
+			continue
+		} else if ln.CanBreak() {
+			break
+		}
+		text = ln.Line
+		fmt.Println("Current line", text)
 		matches = strings.Fields(text)
 		if len(matches) == 0 {
 			continue

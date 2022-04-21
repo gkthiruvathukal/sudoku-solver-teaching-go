@@ -486,13 +486,8 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 			break
 		}
 
-		if ln.CanContinue() {
-			continue
-		} else if ln.CanBreak() {
-			break
-		}
 		text = ln.Line
-		fmt.Println("Current line", text)
+		fmt.Println(">> ", text)
 		matches = strings.Fields(text)
 		if len(matches) == 0 {
 			continue

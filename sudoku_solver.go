@@ -299,7 +299,8 @@ func commandLineSolver(puzzle string, solution string) int {
 	return 0
 }
 
-func interactiveSolver(puzzle string, solution string, filename string) bool {
+func interactiveSolver(puzzle string, solution string, journalFilename string) bool {
+
 	sudoku := getSudoku()
 	if len(puzzle) == 0 {
 		return false
@@ -515,37 +516,48 @@ func interactiveSolver(puzzle string, solution string, filename string) bool {
 
 func main() {
 
-	solveCmd := flag.NewFlagSet("solve", flag.ExitOnError)
+	// command flags
+
+	solveCmd := flag.NewFlagSet("any", flag.ExitOnError)
 	solvePuzzle := solveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
 	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
-
-	interactiveCmd := flag.NewFlagSet("interactive", flag.ExitOnError)
-	interactivePuzzle := interactiveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
-	interactiveSolution := interactiveCmd.String("solution", "", "puzzle to solve (81 characters)")
-	interactiveStateFile := interactiveCmd.String("filename", ".sudoku-state", "basename of checkpoint filename")
-	// Other flags TBD.
+	solveStateFile := solveCmd.String("journal", "", "journal filename")
 
 	if len(os.Args) < 2 {
 		fmt.Println("expected subcommands: solve, interactive")
+		solveCmd.PrintDefaults()
 		os.Exit(1)
 	}
 
-	success := 0
-	switch os.Args[1] {
-	case "solve":
+	// lambdas for subcommands
+
+	solve := func() bool {
 		solveCmd.Parse(os.Args[2:])
-		success = commandLineSolver(*solvePuzzle, *solveSolution)
-	case "interactive":
-		interactiveCmd.Parse(os.Args[2:])
-		solved := interactiveSolver(*interactivePuzzle, *interactiveSolution, *interactiveStateFile)
-		if solved {
-			os.Exit(0)
-		} else {
-			os.Exit(1)
-		}
-	default:
-		fmt.Println("expected 'solve' or 'interactive' subcommands")
+		return commandLineSolver(*solvePuzzle, *solveSolution) == 0
+	}
+
+	interactive := func() bool {
+		solveCmd.Parse(os.Args[2:])
+		return interactiveSolver(*solvePuzzle, *solveSolution, *solveStateFile)
+	}
+
+	subcommands := map[string]func() bool{
+		"solve":       solve,
+		"interactive": interactive,
+	}
+
+	subcommand := os.Args[1]
+	f := subcommands[subcommand]
+	if f == nil {
+		fmt.Printf("Unknown subcommand: %s\n", subcommand)
 		os.Exit(1)
 	}
-	os.Exit(success)
+	fmt.Println("subcommand parsing", os.Args[2:])
+	solveCmd.Parse(os.Args[2:])
+	result := f()
+	if result {
+		os.Exit(0)
+	} else {
+		os.Exit(1)
+	}
 }

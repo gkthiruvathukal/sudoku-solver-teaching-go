@@ -518,7 +518,7 @@ func main() {
 
 	// command flags
 
-	solveCmd := flag.NewFlagSet("any", flag.ExitOnError)
+	solveCmd := flag.NewFlagSet("subcommand", flag.ExitOnError)
 	solvePuzzle := solveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
 	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
 	solveStateFile := solveCmd.String("journal", "", "journal filename")
@@ -547,14 +547,15 @@ func main() {
 	}
 
 	subcommand := os.Args[1]
-	f := subcommands[subcommand]
-	if f == nil {
-		fmt.Printf("Unknown subcommand: %s\n", subcommand)
+	f, found := subcommands[subcommand]
+	result := false
+	if found {
+		solveCmd.Parse(os.Args[2:])
+		result = f()
+	} else {
+		fmt.Println("Unknown command", subcommand)
 		os.Exit(1)
 	}
-	fmt.Println("subcommand parsing", os.Args[2:])
-	solveCmd.Parse(os.Args[2:])
-	result := f()
 	if result {
 		os.Exit(0)
 	} else {

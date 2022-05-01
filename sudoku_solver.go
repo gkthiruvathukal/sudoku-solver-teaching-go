@@ -34,7 +34,6 @@ func getSudoku() *Sudoku {
 	sudoku.init()
 	return sudoku
 }
-
 func (sudoku *Sudoku) init() {
 	for i := 0; i < PuzzleDimension; i++ {
 		sudoku.rowUsed[i].init()
@@ -320,7 +319,7 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 	// example: set -x 0 -y 1 -value 2; will assign &x, &y, &value
 	setCmd.IntVar(&x, "x", -1, "value of x coordinate of Sudoku [0, 8])")
 	setCmd.IntVar(&y, "y", -1, "value of x coordinate of Sudoku [0, 8])")
-	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]]")
+	setCmd.IntVar(&value, "value", -1, "value to place at (x, y): [1, 9]")
 
 	// example: get -x 0 -y 1; will assign &x, &y
 	getCmd := flag.NewFlagSet("get", flag.ContinueOnError)
@@ -365,6 +364,7 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 
 	clear := func() bool {
 		fmt.Println("Previous State")
+		sudoku.init()
 		sudoku.show()
 		sudoku.loadData(puzzle)
 		fmt.Println("New State")
@@ -446,11 +446,6 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 		return false
 	}
 
-	help := func() bool {
-		fmt.Printf("To appear soon (%s)\n", text)
-		return false
-	}
-
 	commands := map[string]func() bool{
 		"set":         set,
 		"get":         get,
@@ -462,8 +457,23 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 		"save":        save,
 		"load":        load,
 		"checkpoints": checkpoint,
-		"help":        help,
 	}
+
+	help := func() bool {
+
+		fmt.Println("Commands [to be made even nicer later]:")
+		for cmdName, _ := range commands {
+			fmt.Printf("%s:\n", cmdName)
+			flagSet := fs[cmdName]
+			if flagSet != nil {
+				flagSet.PrintDefaults()
+			}
+			fmt.Println()
+		}
+		return false
+	}
+
+	commands["help"] = help
 
 	// Main interpreter loop.
 
@@ -518,27 +528,27 @@ func main() {
 
 	// command flags
 
-	solveCmd := flag.NewFlagSet("subcommand", flag.ExitOnError)
-	solvePuzzle := solveCmd.String("puzzle", "", "puzzle to solve (81 characters)")
-	solveSolution := solveCmd.String("solution", "", "puzzle to solve (81 characters)")
-	solveStateFile := solveCmd.String("journal", "", "journal filename")
+	subCmdFS := flag.NewFlagSet("subcommand", flag.ExitOnError)
+	puzzleFlag := subCmdFS.String("puzzle", "", "puzzle to solve (81 characters)")
+	solutionFlag := subCmdFS.String("solution", "", "puzzle to solve (81 characters)")
+	journalFlag := subCmdFS.String("journal", "", "journal filename")
 
 	if len(os.Args) < 2 {
 		fmt.Println("expected subcommands: solve, interactive")
-		solveCmd.PrintDefaults()
+		subCmdFS.PrintDefaults()
 		os.Exit(1)
 	}
 
 	// lambdas for subcommands
 
 	solve := func() bool {
-		solveCmd.Parse(os.Args[2:])
-		return commandLineSolver(*solvePuzzle, *solveSolution) == 0
+		subCmdFS.Parse(os.Args[2:])
+		return commandLineSolver(*puzzleFlag, *solutionFlag) == 0
 	}
 
 	interactive := func() bool {
-		solveCmd.Parse(os.Args[2:])
-		return interactiveSolver(*solvePuzzle, *solveSolution, *solveStateFile)
+		subCmdFS.Parse(os.Args[2:])
+		return interactiveSolver(*puzzleFlag, *solutionFlag, *journalFlag)
 	}
 
 	subcommands := map[string]func() bool{
@@ -550,7 +560,7 @@ func main() {
 	f, found := subcommands[subcommand]
 	result := false
 	if found {
-		solveCmd.Parse(os.Args[2:])
+		subCmdFS.Parse(os.Args[2:])
 		result = f()
 	} else {
 		fmt.Println("Unknown command", subcommand)

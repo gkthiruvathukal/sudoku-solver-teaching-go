@@ -446,24 +446,29 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 		return false
 	}
 
-	commands := map[string]func() bool{
-		"set":         set,
-		"get":         get,
-		"status":      status,
-		"clear":       clear,
-		"quit":        quit,
-		"show":        show,
-		"solve":       solve,
-		"save":        save,
-		"load":        load,
-		"checkpoints": checkpoint,
+	type Command struct {
+		description string
+		f           func() bool
 	}
 
-	help := func() bool {
+	commands := map[string]*Command{
+		"set":         {"set an (x, y) position in the current solution", set},
+		"get":         {"get the (x, y) position in the current solution", get},
+		"status":      {"show status of the solution", status},
+		"clear":       {"revert to the initial state of solution", clear},
+		"quit":        {"quit and return whether solved or not", quit},
+		"show":        {"show current solution", show},
+		"solve":       {"give up and solve the puzzle", solve},
+		"save":        {"save current state", save},
+		"load":        {"load previous state", load},
+		"checkpoints": {"show list of checkpoints", checkpoint},
+	}
+
+	helpFunc := func() bool {
 
 		fmt.Println("Commands [to be made even nicer later]:")
 		for cmdName, _ := range commands {
-			fmt.Printf("%s:\n", cmdName)
+			fmt.Printf("%s: %s\n", cmdName, commands[cmdName].description)
 			flagSet := fs[cmdName]
 			if flagSet != nil {
 				flagSet.PrintDefaults()
@@ -473,8 +478,11 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 		return false
 	}
 
-	commands["help"] = help
+	helpDesc := new(Command)
+	helpDesc.description = "get help"
+	helpDesc.f = helpFunc
 
+	commands["help"] = helpDesc
 	// Main interpreter loop.
 
 	// Set up readline support
@@ -504,14 +512,13 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 			continue
 		}
 		command := matches[0]
-		function := commands[command]
-		if function == nil {
+		cmd := commands[command]
+		if cmd == nil {
 			fmt.Printf("%s: Unknown command\n", command)
 			continue
 		}
 
-		finished := commands[command]() // only true on "quit"
-
+		finished := commands[command].f() // only true on "quit"
 		// check state of puzzle after every command
 		full, _ := sudoku.isFullWithSize()
 		solved = full && sudoku.checkPuzzleValidity()

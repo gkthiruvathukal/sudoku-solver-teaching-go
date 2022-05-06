@@ -465,7 +465,6 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 	}
 
 	helpFunc := func() bool {
-
 		fmt.Println("Commands [to be made even nicer later]:")
 		for cmdName, _ := range commands {
 			fmt.Printf("%s: %s\n", cmdName, commands[cmdName].description)
@@ -473,7 +472,6 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 			if flagSet != nil {
 				flagSet.PrintDefaults()
 			}
-			fmt.Println()
 		}
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/chzyer/readline"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -465,13 +466,27 @@ func interactiveSolver(puzzle string, solution string, journalFilename string) b
 	}
 
 	helpFunc := func() bool {
-		fmt.Println("Commands [to be made even nicer later]:")
+
+		cmdNames := make([]string, len(commands))
+
+		i := 0
 		for cmdName, _ := range commands {
+			cmdNames[i] = cmdName
+			i++
+		}
+
+		sort.Slice(cmdNames, func(i, j int) bool {
+			return cmdNames[i] < cmdNames[j]
+		})
+
+		fmt.Println(cmdNames)
+		for _, cmdName := range cmdNames {
 			fmt.Printf("%s: %s\n", cmdName, commands[cmdName].description)
 			flagSet := fs[cmdName]
 			if flagSet != nil {
 				flagSet.PrintDefaults()
 			}
+			fmt.Println()
 		}
 		return false
 	}

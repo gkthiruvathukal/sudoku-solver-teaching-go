@@ -93,7 +93,297 @@ Puzzle and solution match.
 
 # Interactive Solver
 
-Coming soon.
+The interactive solver allows you to *play* the Sudoku game via a simple set of commands.
+Instead of using the `solve` subcommand, use the `interactive` subcommand.
+
+```
+$ ./sudoku_solver interactive --puzzle  008209000050100207096070408500798600407000500062034001000902100803050000600000740 --solution 178249356354186297296375418531798624487621539962534871745962183813457962629813745
+```
+
+Once in interactive mode, you can play Sudoku, much like you would do in the paper version.
+The only exeption is that you can *cheat* by keeping track of various known states and reverting to them.
+The idea here is that you can *backtrack* at will.
+You can also *foretrack* (is this a word?) to states that may have been promising but you didn't realize it!
+
+## Get Help
+
+The first command you always want to know: Help!
+
+```
+>  help
+[checkpoints clear get help load quit save set show solve status]
+checkpoints: show list of checkpoints
+
+clear: revert to the initial state of solution
+
+get: get the (x, y) position in the current solution
+  -x int
+    	value of x coordinate of Sudoku [0, 8]) (default -1)
+  -y int
+    	value of x coordinate of Sudoku [0, 8]) (default -1)
+
+help: get help
+
+load: load previous state
+  -name string
+    	checkpoint name
+
+quit: quit and return whether solved or not
+
+save: save current state
+  -name string
+    	checkpoint name
+
+set: set an (x, y) position in the current solution
+  -value int
+    	value to place at (x, y): [1, 9] (default -1)
+  -x int
+    	value of x coordinate of Sudoku [0, 8]) (default -1)
+  -y int
+    	value of x coordinate of Sudoku [0, 8]) (default -1)
+
+show: show current solution
+
+solve: give up and solve the puzzle
+
+status: show status of the solution
+```
+
+## Show the current state
+
+The `show` command allows you to see the current state of the puzzle.
+
+```
+>  show
+Puzzle:
+-----------------------------------------
+ 0   0   8   2   0   9   0   0   0   (3)
+ 0   5   0   1   0   0   2   0   7   (4)
+ 0   9   6   0   7   0   4   0   8   (5)
+ 5   0   0   7   9   8   6   0   0   (5)
+ 4   0   7   0   0   0   5   0   0   (3)
+ 0   6   2   0   3   4   0   0   1   (5)
+ 0   0   0   9   0   2   1   0   0   (3)
+ 8   0   3   0   5   0   0   0   0   (3)
+ 6   0   0   0   0   0   7   4   0   (3)
+-----------------------------------------
+(4) (3) (5) (4) (4) (4) (6) (1) (3)
+
+Nonets:
+(4) (4) (4)
+(5) (5) (3)
+(3) (3) (3)
+
+```
+
+The output of this command does the following:
+- shows the current puzzle values
+- the last column shows the number of *distinct* row values 1-9 (0 is not counted as it indicates an unsolved position)
+- the last row shows the number of *distinct* column values 1-9 (0 is not counted as it indicates an unsolved position)
+- Nonets indicates whether the number of *distinct* values 1-9 in the 3x3 submatrix
+
+## Save current stae
+
+Same the current state of the puzzle as name `initial`. (You can use any name you like to save the state at any time.)
+
+```
+>  save -name initial
+```
+
+## Show previously saved states
+
+```
+>  checkpoints
+Checkpoints: Note that these are not in order
+008209000050100207096070408500798600407000500062034001000902100803050000600000740 / initial
+```
+
+## Solve the puzzle from the current state.
+
+```
+>  solve
+
+Puzzle:
+-----------------------------------------
+ 1   7   8   2   4   9   3   5   6   (9)
+ 3   5   4   1   8   6   2   9   7   (9)
+ 2   9   6   3   7   5   4   1   8   (9)
+ 5   3   1   7   9   8   6   2   4   (9)
+ 4   8   7   6   2   1   5   3   9   (9)
+ 9   6   2   5   3   4   8   7   1   (9)
+ 7   4   5   9   6   2   1   8   3   (9)
+ 8   1   3   4   5   7   9   6   2   (9)
+ 6   2   9   8   1   3   7   4   5   (9)
+-----------------------------------------
+(9) (9) (9) (9) (9) (9) (9) (9) (9)
+
+Nonets:
+(9) (9) (9)
+(9) (9) (9)
+(9) (9) (9)
+```
+
+## Show the current state
+
+```
+>  show
+Puzzle:
+-----------------------------------------
+ 1   7   8   2   4   9   3   5   6   (9)
+ 3   5   4   1   8   6   2   9   7   (9)
+ 2   9   6   3   7   5   4   1   8   (9)
+ 5   3   1   7   9   8   6   2   4   (9)
+ 4   8   7   6   2   1   5   3   9   (9)
+ 9   6   2   5   3   4   8   7   1   (9)
+ 7   4   5   9   6   2   1   8   3   (9)
+ 8   1   3   4   5   7   9   6   2   (9)
+ 6   2   9   8   1   3   7   4   5   (9)
+-----------------------------------------
+(9) (9) (9) (9) (9) (9) (9) (9) (9)
+
+Nonets:
+(9) (9) (9)
+(9) (9) (9)
+(9) (9) (9)
+```
+
+## Save another state
+
+```
+>  save -name solved
+>  checkpoints
+Checkpoints: Note that these are not in order
+008209000050100207096070408500798600407000500062034001000902100803050000600000740 / initial
+178249356354186297296375418531798624487621539962534871745962183813457962629813745 / solved
+```
+
+## Revert to earlier state
+
+```
+>  load -name initial
+Loading puzzle:  008209000050100207096070408500798600407000500062034001000902100803050000600000740
+```
+
+## And observe that it works
+
+```
+>  show
+Puzzle:
+-----------------------------------------
+ 0   0   8   2   0   9   0   0   0   (3)
+ 0   5   0   1   0   0   2   0   7   (4)
+ 0   9   6   0   7   0   4   0   8   (5)
+ 5   0   0   7   9   8   6   0   0   (5)
+ 4   0   7   0   0   0   5   0   0   (3)
+ 0   6   2   0   3   4   0   0   1   (5)
+ 0   0   0   9   0   2   1   0   0   (3)
+ 8   0   3   0   5   0   0   0   0   (3)
+ 6   0   0   0   0   0   7   4   0   (3)
+-----------------------------------------
+(4) (3) (5) (4) (4) (4) (6) (1) (3)
+
+Nonets:
+(4) (4) (4)
+(5) (5) (3)
+(3) (3) (3)
+```
+
+# Now make some moves
+
+Here is a move that works:
+
+```
+>  set -x 0 -y 0 -value 1
+```
+
+Here is one that doesn't:
+
+```
+>  set -x 0 -y 1 -value 2
+2 not valid at (0, 1)
+```
+
+And here is another that works (showing how to make further progress):
+
+```
+>  set -x 0 -y 1 -value 7
+
+>  show
+Puzzle:
+-----------------------------------------
+ 1   7   8   2   0   9   0   0   0   (5)
+ 0   5   0   1   0   0   2   0   7   (4)
+ 0   9   6   0   7   0   4   0   8   (5)
+ 5   0   0   7   9   8   6   0   0   (5)
+ 4   0   7   0   0   0   5   0   0   (3)
+ 0   6   2   0   3   4   0   0   1   (5)
+ 0   0   0   9   0   2   1   0   0   (3)
+ 8   0   3   0   5   0   0   0   0   (3)
+ 6   0   0   0   0   0   7   4   0   (3)
+-----------------------------------------
+(5) (4) (5) (4) (4) (4) (6) (1) (3)
+
+Nonets:
+(6) (4) (4)
+(5) (5) (3)
+(3) (3) (3)
+```
+
+## Clear state
+
+Coming soon
+
+## Show puzzle status
+
+In it's current state, the puzzle is unsolved.
+The `status` command indicates that it is unsolved. The long string of digits is the concise representation of the puzzle.
+
+```
+>  status
+Unsolved 178209000050100207096070408500798600407000500062034001000902100803050000600000740
+```
+
+To see how the status changes, use the `solve` command to solve the puzzle:
+
+```
+>  solve
+
+Puzzle:
+-----------------------------------------
+ 1   7   8   2   4   9   3   5   6   (9)
+ 3   5   4   1   8   6   2   9   7   (9)
+ 2   9   6   3   7   5   4   1   8   (9)
+ 5   3   1   7   9   8   6   2   4   (9)
+ 4   8   7   6   2   1   5   3   9   (9)
+ 9   6   2   5   3   4   8   7   1   (9)
+ 7   4   5   9   6   2   1   8   3   (9)
+ 8   1   3   4   5   7   9   6   2   (9)
+ 6   2   9   8   1   3   7   4   5   (9)
+-----------------------------------------
+(9) (9) (9) (9) (9) (9) (9) (9) (9)
+
+Nonets:
+(9) (9) (9)
+(9) (9) (9)
+(9) (9) (9)
+```
+
+Now check the status again!
+
+```
+>  status
+Solved 178249356354186297296375418531798624487621539962534871745962183813457962629813745
+```
+
+## Quit
+
+This exits the interactive mode.
+Note that `quit` does not care whether you really solved the puzzleor not.
+However it will return whether the puzzle was solved or not to allow for proper exit.
+
+```
+>  quit
+```
 
 # Run Tests
 

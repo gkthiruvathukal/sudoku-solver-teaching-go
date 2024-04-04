@@ -22,7 +22,7 @@ See below for details!
 # Install
 
 ```
-$ git clone https://gkthiruvathukal/ssolver-go
+$ git clone https://gkthiruvathukal/sudoku-solver-teaching-go
 $ go build
 $ go install
 ```

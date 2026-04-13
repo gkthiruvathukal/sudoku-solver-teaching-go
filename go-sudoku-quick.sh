@@ -1,5 +1,13 @@
 #!/bin/bash
 
+set -u
+
+export GOCACHE="${GOCACHE:-/tmp/go-build}"
+export GOPATH="${GOPATH:-/tmp/go}"
+export GOMODCACHE="${GOMODCACHE:-/tmp/go/pkg/mod}"
+
+go build -o ./sudoku_solver .
+
 i=0
 status=0
 for filename in data/*-sample-*.txt; do
@@ -9,8 +17,9 @@ for filename in data/*-sample-*.txt; do
       echo "$col1"
       echo "$col2"
       ./sudoku_solver solve --puzzle "$col1"  --solution "$col2"
-      status=$(($status + $?))
-      if [ $? == 0 ]; then
+      exit_code=$?
+      status=$(($status + $exit_code))
+      if [ $exit_code == 0 ]; then
          echo "Success"
       else
          echo "Failure"
@@ -19,4 +28,4 @@ for filename in data/*-sample-*.txt; do
 done
 
 echo "Exiting with $status"
-echo $status
+exit $status

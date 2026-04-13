@@ -5,34 +5,30 @@ import (
 )
 
 func TestGSetNew(t *testing.T) {
-	s := new(Set[string])
-	s.init()
-	if s.size() != 0 {
-		t.Errorf("size not zero - actual size is %d", s.size())
+	s := NewSet[string]()
+	if s.Len() != 0 {
+		t.Errorf("size not zero - actual size is %d", s.Len())
 	}
 }
 
 func TestGSetBasic(t *testing.T) {
-	s := new(Set[string])
-	s.init()
-	s.add("a")
-	if s.size() != 1 {
-		t.Errorf("size not zero - actual size is %d", s.size())
+	s := NewSet[string]()
+	s.Add("a")
+	if s.Len() != 1 {
+		t.Errorf("size not zero - actual size is %d", s.Len())
 	}
-	if !s.contains("a") {
+	if !s.Has("a") {
 		t.Errorf("cannot find element  %s", "a")
 	}
 }
 
 func TestGSetInts(t *testing.T) {
-
-	s := new(Set[int])
-	s.init()
+	s := NewSet[int]()
 
 	for i := 0; i < 10; i++ {
-		s.add(i)
+		s.Add(i)
 	}
-	if s.size() < 10 {
-		t.Errorf("incorrect size %d", s.size())
+	if s.Len() < 10 {
+		t.Errorf("incorrect size %d", s.Len())
 	}
 }

@@ -28,12 +28,12 @@ func NewSudoku() *Sudoku {
 func (s *Sudoku) Reset() {
 	s.puzzle = [PuzzleDimension][PuzzleDimension]int{}
 	for i := 0; i < PuzzleDimension; i++ {
-		s.rowUsed[i].Reset()
-		s.columnUsed[i].Reset()
+		s.rowUsed[i].Clear()
+		s.columnUsed[i].Clear()
 	}
 	for i := 0; i < NonetDimension; i++ {
 		for j := 0; j < NonetDimension; j++ {
-			s.nonet[i][j].Reset()
+			s.nonet[i][j].Clear()
 		}
 	}
 }

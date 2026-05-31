@@ -806,11 +806,14 @@ func startQuickSolve(snapshot string, positions []int) tea.Cmd {
 	updates := make(chan quickSolveMsg, 1)
 	go func() {
 		working := NewSudoku()
-		_ = working.Load(snapshot)
-		events, placements, backtracks, solved := working.traceSolveWithCounts(positions, func(p, b int) {
+		if err := working.Load(snapshot); err != nil {
+			sendQuickSolveMsg(updates, quickSolveMsg{finish: true})
+			close(updates)
+			return
+		}
+		placements, backtracks, solved := working.countSolvePositions(positions, func(p, b int) {
 			sendQuickSolveMsg(updates, quickSolveMsg{placements: p, backtracks: b})
 		})
-		_ = events
 		result := ""
 		if solved {
 			result = working.Representation()
@@ -825,7 +828,11 @@ func startBuildTrace(original string, positions []int) tea.Cmd {
 	updates := make(chan buildTraceMsg, 1)
 	go func() {
 		working := NewSudoku()
-		_ = working.Load(original)
+		if err := working.Load(original); err != nil {
+			sendBuildTraceMsg(updates, buildTraceMsg{finish: true})
+			close(updates)
+			return
+		}
 		events, placements, backtracks, solved := working.traceSolveWithCounts(positions, func(p, b int) {
 			sendBuildTraceMsg(updates, buildTraceMsg{placements: p, backtracks: b})
 		})

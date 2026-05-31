@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	PuzzleDigits    = 9
 	PuzzleDimension = 9
 	NonetDimension  = 3
 )
@@ -235,57 +234,11 @@ func (s *Sudoku) Load(text string) error {
 }
 
 func (s *Sudoku) Solve() bool {
-	return s.solveFrom(0, 0, nil)
+	return s.SolveWithOrder(s.RowMajorPositions())
 }
 
 func (s *Sudoku) TraceSolve() ([]TraceEvent, bool) {
-	events := make([]TraceEvent, 0)
-	solved := s.solveFrom(0, 0, func(event TraceEvent) {
-		events = append(events, event)
-	})
-	return events, solved
-}
-
-func (s *Sudoku) solveFrom(startRow int, startCol int, record func(TraceEvent)) bool {
-	row, col, available := s.nextEmpty(startRow, startCol)
-	if !available {
-		solved := s.IsSolved()
-		if solved && record != nil {
-			record(TraceEvent{Type: TraceSolved})
-		}
-		return solved
-	}
-
-	for digit := 1; digit <= PuzzleDigits; digit++ {
-		if s.IsCandidate(row, col, digit) {
-			s.SetValue(row, col, digit)
-			if record != nil {
-				record(TraceEvent{Type: TracePlace, Row: row, Col: col, Value: digit})
-			}
-			if filled, _ := s.IsFull(); filled || s.solveFrom(row, col, record) {
-				if filled && record != nil && s.IsSolved() {
-					record(TraceEvent{Type: TraceSolved})
-				}
-				return true
-			}
-			s.ClearValue(row, col)
-			if record != nil {
-				record(TraceEvent{Type: TraceBacktrack, Row: row, Col: col, Value: digit})
-			}
-		}
-	}
-	return false
-}
-
-func (s *Sudoku) nextEmpty(row int, col int) (int, int, bool) {
-	for pos := row*PuzzleDimension + col; pos < PuzzleDimension*PuzzleDimension; pos++ {
-		posRow := pos / PuzzleDimension
-		posCol := pos % PuzzleDimension
-		if s.puzzle[posRow][posCol] == 0 {
-			return posRow, posCol, true
-		}
-	}
-	return -1, -1, false
+	return s.TraceSolveWithOrder(s.RowMajorPositions())
 }
 
 // RowMajorPositions returns all 81 cell positions in left-to-right, top-to-bottom
@@ -363,7 +316,7 @@ func (s *Sudoku) solvePositions(positions []int, start int, record func(TraceEve
 
 	row := positions[start] / PuzzleDimension
 	col := positions[start] % PuzzleDimension
-	for digit := 1; digit <= PuzzleDigits; digit++ {
+	for digit := 1; digit <= PuzzleDimension; digit++ {
 		if s.IsCandidate(row, col, digit) {
 			s.SetValue(row, col, digit)
 			if record != nil {
@@ -379,6 +332,25 @@ func (s *Sudoku) solvePositions(positions []int, start int, record func(TraceEve
 		}
 	}
 	return false
+}
+
+// countSolvePositions solves using the given position order and counts placements
+// and backtracks without collecting the full trace event slice.
+func (s *Sudoku) countSolvePositions(positions []int, onProgress func(placements, backtracks int)) (int, int, bool) {
+	placements, backtracks, step := 0, 0, 0
+	solved := s.solvePositions(positions, 0, func(e TraceEvent) {
+		switch e.Type {
+		case TracePlace:
+			placements++
+		case TraceBacktrack:
+			backtracks++
+		}
+		step++
+		if onProgress != nil && step%500 == 0 {
+			onProgress(placements, backtracks)
+		}
+	})
+	return placements, backtracks, solved
 }
 
 // traceSolveWithCounts runs TraceSolveWithOrder and calls onProgress every 500

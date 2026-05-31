@@ -11,11 +11,6 @@ import (
 	"github.com/chzyer/readline"
 )
 
-type solverConfig struct {
-	puzzle   string
-	solution string
-}
-
 func commandLineSolver(puzzle string, solution string, strategy string) error {
 	sudoku := NewSudoku()
 
@@ -52,7 +47,7 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 				sumC += cnt
 			}
 		}
-		fmt.Printf("Clues: %d total | nonets min=%d max=%d avg=%.1f\n", total, minC, maxC, float64(sumC)/9.0)
+		fmt.Printf("Clues: %d total | nonets min=%d max=%d avg=%.1f\n", total, minC, maxC, float64(sumC)/float64(NonetDimension*NonetDimension))
 	}
 
 	var positions []int
@@ -65,9 +60,8 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 		return fmt.Errorf("unknown strategy %q: choose row-major or nonet-first", strategy)
 	}
 	start := time.Now()
-	events, placements, backtracks, solved := sudoku.traceSolveWithCounts(positions, nil)
+	placements, backtracks, solved := sudoku.countSolvePositions(positions, nil)
 	elapsed := time.Since(start)
-	_ = events
 
 	fmt.Printf("Strategy: %s | %d placements, %d backtracks | %s | %d\n", strategy, placements, backtracks, elapsed.Round(time.Microsecond), elapsed.Nanoseconds())
 
@@ -139,10 +133,7 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 	return nil
 }
 
-func interactiveSolver(puzzle string, solution string, journalFilename string) bool {
-	_ = solution
-	_ = journalFilename
-
+func interactiveSolver(puzzle string) bool {
 	sudoku := NewSudoku()
 	if puzzle == "" {
 		return false
@@ -372,8 +363,6 @@ func main() {
 	puzzleFlag := subCmdFS.String("puzzle", "", "puzzle to solve (81 characters)")
 	solutionFlag := subCmdFS.String("solution", "", "expected solved puzzle (81 characters)")
 	strategyFlag := subCmdFS.String("strategy", "row-major", "traversal strategy: row-major or nonet-first")
-	journalFlag := subCmdFS.String("journal", "", "journal filename")
-
 	if len(os.Args) < 2 {
 		fmt.Println("expected subcommands: solve, interactive, tui")
 		subCmdFS.PrintDefaults()
@@ -391,7 +380,7 @@ func main() {
 			if err := subCmdFS.Parse(os.Args[2:]); err != nil {
 				return err
 			}
-			if interactiveSolver(*puzzleFlag, *solutionFlag, *journalFlag) {
+			if interactiveSolver(*puzzleFlag) {
 				return nil
 			}
 			return fmt.Errorf("session ended without a solved puzzle")

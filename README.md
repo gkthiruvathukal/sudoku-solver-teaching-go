@@ -7,11 +7,13 @@ This example is primarily intended to be a *pedagogical* one.
 Students often struggle to learn recursion. So we (@klaeufer and @gkthiruvathukal) got inspired to develop examples that show how to work with recursion.
 In this implementation of Sudoku, we create a recursive solver by recursively *playing* positions and backtracking as needed until a solution is obtained.
 
-In addition to having a solver, the game can be interactively played with a command line interface (CLI) to learn how the various methods work.
+In addition to having a solver, the game can be interactively played with a command line interface (CLI) or a terminal user interface (TUI) to learn how the various methods work.
 
 The unattended solver is played by `./sudoko_solver solve --puzzle <PUZZLE>` or`./sudoko_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). 
 
 The interactive solver with a command-line interfaace is played with `./sudoku_solver interactive`. Similar to the unattended solver, you can specify `--puzzle` and `--solution`.
+
+The terminal UI is played with `./sudoku_solver tui --puzzle <PUZZLE>`. It shows the puzzle, a scrollable command log, and a command prompt in one terminal screen.
 
 See below for details!
 
@@ -90,6 +92,79 @@ Solution
 
 Puzzle and solution match.
 ```
+
+# Terminal UI Solver
+
+The `tui` subcommand opens a full-screen terminal interface for playing and teaching Sudoku. Original clue cells are read-only. Editable cells can be changed with direct keyboard entry or slash commands.
+
+```
+$ ./sudoku_solver tui --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090
+```
+
+The TUI uses three main areas: the puzzle, the log, and the command prompt. On wide terminals, the log appears to the right of the puzzle and uses the remaining width. On narrow terminals, the log appears below the puzzle. The command prompt always spans the full available width.
+
+```text
+Sudoku Solver
+
+Puzzle                                      Log  follow
+╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  16  ┌──────────────────────────────────────┐
+║ 3 │   │   ║ 4 │   │ 1 ║ 6 │ 2 │   ║      │ Loaded puzzle. Press / for commands.  │
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢      │                                      │
+║ 1 │   │   ║   │ 8 │   ║ 4 │   │   ║  13  │ /get 0 0                             │
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢      │ get: x = 0, y = 0, value = 3          │
+║   │   │ 5 ║   │ 2 │   ║ 8 │ 3 │   ║  18  │                                      │
+╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣      │ /set 0 1 9                          │
+║   │ 5 │ 7 ║ 8 │   │   ║   │   │   ║  20  │ 9 is not valid at (0, 1).            │
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢      │                                      │
+║   │   │   ║ 7 │   │   ║ 5 │   │ 3 ║  15  │ /help                                │
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢      │ Commands: /set, /get, /clear, ...    │
+║   │   │ 2 ║ 9 │   │ 4 ║   │   │ 7 ║  22  └──────────────────────────────────────┘
+╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣
+║ 4 │ 8 │   ║ 5 │ 3 │   ║   │ 1 │   ║  21
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢
+║ 2 │   │ 3 ║   │ 9 │   ║   │   │   ║  14
+╟───┼───┼───╫───┼───┼───╫───┼───┼───╢
+║   │ 7 │   ║   │   │ 6 ║   │ 9 │   ║  22
+╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝
+ 10  20  17  33  22  11  23  15  10
+
+Command
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ /set 0 1 9                                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+## TUI Keyboard Controls
+
+- Arrow keys or `h`, `j`, `k`, `l`: move the selected cell.
+- `1`-`9`: set the selected editable cell.
+- `0`, Backspace, or Delete: clear the selected editable cell.
+- `/`: focus the command prompt.
+- Escape: leave the command prompt and return to the puzzle.
+- Page Up or `ctrl+u`: scroll the log up.
+- Page Down or `ctrl+d`: scroll the log down.
+- Home: jump to the oldest log output.
+- End: jump to the newest log output and resume following new output.
+- `q` or `ctrl+c`: quit.
+
+## TUI Slash Commands
+
+Commands use the same zero-based coordinate convention as interactive mode: `x` is the row and `y` is the column, each in the range `0` through `8`.
+
+```text
+/set x y value     Set an editable cell.
+/get x y           Show the value at a cell.
+/clear             Reset to the original puzzle.
+/solve             Solve from the current board.
+/status            Show solved/full state and board representation.
+/save name         Save current board as a checkpoint.
+/load name         Restore a checkpoint.
+/checkpoints       List saved checkpoints.
+/help              Show command help in the log.
+/quit              Exit the TUI.
+```
+
+When commands run, the log inserts a blank line before the next command block. This makes it easier to distinguish command output while teaching or demonstrating moves.
 
 # Interactive Solver
 

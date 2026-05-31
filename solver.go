@@ -119,6 +119,28 @@ func (s *Sudoku) Value(row int, col int) (int, bool) {
 	return s.puzzle[row][col], true
 }
 
+func (s *Sudoku) RowSum(row int) (int, bool) {
+	if row < 0 || row >= PuzzleDimension {
+		return 0, false
+	}
+	sum := 0
+	for col := 0; col < PuzzleDimension; col++ {
+		sum += s.puzzle[row][col]
+	}
+	return sum, true
+}
+
+func (s *Sudoku) ColumnSum(col int) (int, bool) {
+	if col < 0 || col >= PuzzleDimension {
+		return 0, false
+	}
+	sum := 0
+	for row := 0; row < PuzzleDimension; row++ {
+		sum += s.puzzle[row][col]
+	}
+	return sum, true
+}
+
 func (s *Sudoku) SetValue(row int, col int, value int) bool {
 	if value < 0 || value > PuzzleDimension {
 		return false

@@ -280,7 +280,7 @@ func main() {
 	journalFlag := subCmdFS.String("journal", "", "journal filename")
 
 	if len(os.Args) < 2 {
-		fmt.Println("expected subcommands: solve, interactive")
+		fmt.Println("expected subcommands: solve, interactive, tui")
 		subCmdFS.PrintDefaults()
 		os.Exit(1)
 	}
@@ -300,6 +300,12 @@ func main() {
 				return nil
 			}
 			return fmt.Errorf("session ended without a solved puzzle")
+		},
+		"tui": func() error {
+			if err := subCmdFS.Parse(os.Args[2:]); err != nil {
+				return err
+			}
+			return runSudokuTUI(*puzzleFlag, *solutionFlag)
 		},
 	}
 

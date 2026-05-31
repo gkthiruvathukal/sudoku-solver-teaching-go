@@ -140,6 +140,28 @@ func TestValueAndSetValueBounds(t *testing.T) {
 	}
 }
 
+func TestRowAndColumnSums(t *testing.T) {
+	sudoku := NewSudoku()
+	puzzle := "123000000400000000500000000000000000000000000000000000000000000000000000000000000"
+
+	if err := sudoku.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if sum, ok := sudoku.RowSum(0); !ok || sum != 6 {
+		t.Fatalf("RowSum(0) = %d, %t; want 6, true", sum, ok)
+	}
+	if sum, ok := sudoku.ColumnSum(0); !ok || sum != 10 {
+		t.Fatalf("ColumnSum(0) = %d, %t; want 10, true", sum, ok)
+	}
+	if _, ok := sudoku.RowSum(-1); ok {
+		t.Fatal("expected RowSum to reject out-of-range row")
+	}
+	if _, ok := sudoku.ColumnSum(PuzzleDimension); ok {
+		t.Fatal("expected ColumnSum to reject out-of-range column")
+	}
+}
+
 func TestClearValueRemovesBookkeeping(t *testing.T) {
 	sudoku := NewSudoku()
 

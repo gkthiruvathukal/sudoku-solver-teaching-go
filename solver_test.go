@@ -332,6 +332,125 @@ func TestCluesMatchErrors(t *testing.T) {
 	}
 }
 
+func TestInvalidPuzzleHasNoSolution(t *testing.T) {
+	// Base: a valid complete solution. Each case mutates one cell to introduce
+	// a specific constraint violation. Fully-filled boards let the solver fail
+	// immediately via IsSolved() rather than exhausting the search space.
+	const base = "864371259325849761971265843436192587198657432257483916689734125713528694542916378"
+	cases := []struct {
+		name   string
+		puzzle string
+	}{
+		{
+			// row 0: two 8s (position 1 changed from '6' to '8')
+			name:   "duplicate in row",
+			puzzle: base[:1] + "8" + base[2:],
+		},
+		{
+			// col 0: two 8s (position 9 changed from '3' to '8')
+			name:   "duplicate in column",
+			puzzle: base[:9] + "8" + base[10:],
+		},
+		{
+			// nonet (0,0): two 8s (position 20 changed from '1' to '8', cell (2,2))
+			name:   "duplicate in nonet",
+			puzzle: base[:20] + "8" + base[21:],
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sudoku := NewSudoku()
+			if err := sudoku.Load(tc.puzzle); err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if sudoku.Solve() {
+				t.Fatal("expected Solve() to return false for puzzle with duplicate clue")
+			}
+		})
+	}
+}
+
+func TestSolvedPuzzleHasCorrectSums(t *testing.T) {
+	const wantSum = 45
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	sudoku := NewSudoku()
+
+	if err := sudoku.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !sudoku.Solve() {
+		t.Fatal("Solve() returned false")
+	}
+
+	for i := 0; i < PuzzleDimension; i++ {
+		if sum, _ := sudoku.RowSum(i); sum != wantSum {
+			t.Errorf("RowSum(%d) = %d, want %d", i, sum, wantSum)
+		}
+		if sum, _ := sudoku.ColumnSum(i); sum != wantSum {
+			t.Errorf("ColumnSum(%d) = %d, want %d", i, sum, wantSum)
+		}
+	}
+	for nr := 0; nr < NonetDimension; nr++ {
+		for nc := 0; nc < NonetDimension; nc++ {
+			if sum, _ := sudoku.NonetSum(nr, nc); sum != wantSum {
+				t.Errorf("NonetSum(%d,%d) = %d, want %d", nr, nc, sum, wantSum)
+			}
+		}
+	}
+}
+
+func TestSolutionDiff(t *testing.T) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	expected := "398471625126385479745629831657813942914762583832954167489537216263198754571246398"
+
+	t.Run("matches expected", func(t *testing.T) {
+		sudoku := NewSudoku()
+		if err := sudoku.Load(puzzle); err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if !sudoku.Solve() {
+			t.Fatal("Solve() returned false")
+		}
+		diffs, err := SolutionDiff(expected, sudoku.Representation())
+		if err != nil {
+			t.Fatalf("SolutionDiff() error = %v", err)
+		}
+		for _, d := range diffs {
+			t.Log(d)
+		}
+		if len(diffs) != 0 {
+			t.Fatalf("solution differs from expected in %d position(s)", len(diffs))
+		}
+	})
+
+	t.Run("reports differing positions", func(t *testing.T) {
+		// Alter positions 0 ('3'→'1') and 5 ('1'→'9') to simulate a mismatch.
+		altered := "1" + expected[1:5] + "9" + expected[6:]
+		diffs, err := SolutionDiff(expected, altered)
+		if err != nil {
+			t.Fatalf("SolutionDiff() error = %v", err)
+		}
+		if len(diffs) != 2 {
+			t.Fatalf("SolutionDiff() returned %d diff(s), want 2: %v", len(diffs), diffs)
+		}
+		for _, d := range diffs {
+			t.Log(d)
+		}
+	})
+}
+
+func TestNonetSumBounds(t *testing.T) {
+	sudoku := NewSudoku()
+
+	if _, ok := sudoku.NonetSum(-1, 0); ok {
+		t.Fatal("expected NonetSum to reject negative nonetRow")
+	}
+	if _, ok := sudoku.NonetSum(0, NonetDimension); ok {
+		t.Fatal("expected NonetSum to reject out-of-range nonetCol")
+	}
+}
+
 func TestSudokuStringIncludesSections(t *testing.T) {
 	sudoku := NewSudoku()
 	if err := sudoku.Load("004300209005009001070060043006002087190007400050083000600000105003508690042910300"); err != nil {

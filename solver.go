@@ -156,6 +156,21 @@ func (s *Sudoku) ColumnSum(col int) (int, bool) {
 	return sum, true
 }
 
+func (s *Sudoku) NonetSum(nonetRow int, nonetCol int) (int, bool) {
+	if nonetRow < 0 || nonetRow >= NonetDimension || nonetCol < 0 || nonetCol >= NonetDimension {
+		return 0, false
+	}
+	sum := 0
+	startRow := nonetRow * NonetDimension
+	startCol := nonetCol * NonetDimension
+	for r := startRow; r < startRow+NonetDimension; r++ {
+		for c := startCol; c < startCol+NonetDimension; c++ {
+			sum += s.puzzle[r][c]
+		}
+	}
+	return sum, true
+}
+
 func (s *Sudoku) SetValue(row int, col int, value int) bool {
 	if value < 0 || value > PuzzleDimension {
 		return false
@@ -270,6 +285,31 @@ func (s *Sudoku) nextEmpty(row int, col int) (int, int, bool) {
 		}
 	}
 	return -1, -1, false
+}
+
+// SolutionDiff returns one description per position where expected and obtained
+// differ. Positions that are identical are omitted from the result.
+func SolutionDiff(expected, obtained string) ([]string, error) {
+	exp, err := parseDigits(expected)
+	if err != nil {
+		return nil, fmt.Errorf("expected solution: %w", err)
+	}
+	obt, err := parseDigits(obtained)
+	if err != nil {
+		return nil, fmt.Errorf("obtained solution: %w", err)
+	}
+	if len(exp) != len(obt) {
+		return nil, fmt.Errorf("length mismatch: expected %d, obtained %d", len(exp), len(obt))
+	}
+	var diffs []string
+	for i := range exp {
+		if exp[i] != obt[i] {
+			row := i / PuzzleDimension
+			col := i % PuzzleDimension
+			diffs = append(diffs, fmt.Sprintf("(%d,%d): expected %d, got %d", row, col, exp[i], obt[i]))
+		}
+	}
+	return diffs, nil
 }
 
 func cluesMatch(puzzle string, solution string) (bool, int, error) {

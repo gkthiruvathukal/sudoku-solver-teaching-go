@@ -27,9 +27,12 @@ func commandLineSolver(puzzle string, solution string) error {
 
 	fmt.Printf("Puzzle:\n%s\n", puzzle)
 	fmt.Print(sudoku)
-	sudoku.Solve()
-	fmt.Println()
 
+	if !sudoku.Solve() {
+		return fmt.Errorf("no solution found for puzzle")
+	}
+
+	fmt.Println()
 	result := sudoku.Representation()
 	fmt.Printf("Solution\n%s\n", result)
 	fmt.Print(sudoku)
@@ -37,11 +40,59 @@ func commandLineSolver(puzzle string, solution string) error {
 	if solution == "" {
 		return nil
 	}
-	if solution != result {
-		return fmt.Errorf("puzzle and solution do not match")
+
+	if solution == result {
+		fmt.Println("Solution matches expected.")
+		return nil
 	}
 
-	fmt.Println("Puzzle and solution match.")
+	fmt.Println("Solution differs from expected; validating obtained solution...")
+
+	const wantSum = 45
+	valid := true
+	for i := 0; i < PuzzleDimension; i++ {
+		if sum, _ := sudoku.RowSum(i); sum != wantSum {
+			valid = false
+			fmt.Printf("  row %d sum = %d (want %d)\n", i, sum, wantSum)
+		}
+		if sum, _ := sudoku.ColumnSum(i); sum != wantSum {
+			valid = false
+			fmt.Printf("  col %d sum = %d (want %d)\n", i, sum, wantSum)
+		}
+	}
+	for nr := 0; nr < NonetDimension; nr++ {
+		for nc := 0; nc < NonetDimension; nc++ {
+			if sum, _ := sudoku.NonetSum(nr, nc); sum != wantSum {
+				valid = false
+				fmt.Printf("  nonet (%d,%d) sum = %d (want %d)\n", nr, nc, sum, wantSum)
+			}
+		}
+	}
+	if ok, pos, err := cluesMatch(puzzle, result); err != nil {
+		return fmt.Errorf("clue check: %w", err)
+	} else if !ok {
+		valid = false
+		fmt.Printf("  original clue at (%d,%d) was modified\n", pos/PuzzleDimension, pos%PuzzleDimension)
+	}
+
+	if valid {
+		fmt.Println("Obtained solution is valid (all constraints satisfied, clues preserved).")
+	} else {
+		fmt.Println("Obtained solution is INVALID.")
+	}
+
+	diffs, err := SolutionDiff(solution, result)
+	if err != nil {
+		return fmt.Errorf("solution diff: %w", err)
+	}
+	fmt.Printf("Differences from expected (%d position(s)):\n", len(diffs))
+	for _, d := range diffs {
+		fmt.Println(" ", d)
+	}
+
+	if !valid {
+		return fmt.Errorf("obtained solution failed constraint checks")
+	}
 	return nil
 }
 

@@ -264,6 +264,8 @@ func (m tuiModel) View() tea.View {
 
 	var builder strings.Builder
 	builder.WriteString(titleStyle.Render("Sudoku Solver"))
+	builder.WriteString("\n")
+	builder.WriteString(m.renderStatusLine())
 	builder.WriteString("\n\n")
 
 	if m.wideLayout() {
@@ -413,6 +415,16 @@ func (m tuiModel) renderLog(width int, height int) string {
 	title := logTitleStyle.Render("Log") + helpHintStyle.Render("  "+scrollState)
 	body := logStyle.Width(width).Height(height).Render(strings.Join(visibleLines, "\n"))
 	return title + "\n" + body
+}
+
+func (m tuiModel) renderStatusLine() string {
+	full, filled := m.sudoku.IsFull()
+	solved := full && m.sudoku.IsSolved()
+	state := "Unsolved"
+	if solved {
+		state = "Solved"
+	}
+	return statusStyle.Render(fmt.Sprintf("Status: %s   Filled: %d/%d", state, filled, PuzzleDimension*PuzzleDimension))
 }
 
 func (m *tuiModel) move(rowDelta int, colDelta int) {
@@ -1405,6 +1417,7 @@ var (
 	defaultTraceDelay = 1000 * time.Microsecond
 
 	titleStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	statusStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	panelTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 	logTitleStyle   = panelTitleStyle
 	helpHintStyle   = lipgloss.NewStyle().

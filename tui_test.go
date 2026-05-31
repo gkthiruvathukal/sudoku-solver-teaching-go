@@ -192,6 +192,20 @@ func TestTUIViewLabelsPuzzlePanel(t *testing.T) {
 	}
 }
 
+func TestTUIViewShowsStatusAndFilledCount(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	view := model.View().Content
+	for _, expected := range []string{"Status: Unsolved", "Filled: 1/81"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("view does not contain %q:\n%s", expected, view)
+		}
+	}
+}
+
 func TestTUITraceStepAndReset(t *testing.T) {
 	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "", "row-major")
 	if err != nil {

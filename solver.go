@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -285,6 +286,122 @@ func (s *Sudoku) nextEmpty(row int, col int) (int, int, bool) {
 		}
 	}
 	return -1, -1, false
+}
+
+// RowMajorPositions returns all 81 cell positions in left-to-right, top-to-bottom
+// order — the same traversal used by Solve.
+func (s *Sudoku) RowMajorPositions() []int {
+	positions := make([]int, PuzzleDimension*PuzzleDimension)
+	for i := range positions {
+		positions[i] = i
+	}
+	return positions
+}
+
+// NonetFirstPositions returns all 81 cell positions ordered by nonet clue density,
+// most-filled nonets first. Within each nonet cells are in row-major order.
+// Call this after Load and before solving so clue counts reflect the initial puzzle.
+func (s *Sudoku) NonetFirstPositions() []int {
+	type nonetInfo struct {
+		nr, nc, clues int
+	}
+	nonets := make([]nonetInfo, 0, NonetDimension*NonetDimension)
+	for nr := 0; nr < NonetDimension; nr++ {
+		for nc := 0; nc < NonetDimension; nc++ {
+			clues := 0
+			for r := nr * NonetDimension; r < (nr+1)*NonetDimension; r++ {
+				for c := nc * NonetDimension; c < (nc+1)*NonetDimension; c++ {
+					if s.puzzle[r][c] != 0 {
+						clues++
+					}
+				}
+			}
+			nonets = append(nonets, nonetInfo{nr, nc, clues})
+		}
+	}
+	sort.Slice(nonets, func(i, j int) bool {
+		return nonets[i].clues > nonets[j].clues
+	})
+
+	positions := make([]int, 0, PuzzleDimension*PuzzleDimension)
+	for _, n := range nonets {
+		for r := n.nr * NonetDimension; r < (n.nr+1)*NonetDimension; r++ {
+			for c := n.nc * NonetDimension; c < (n.nc+1)*NonetDimension; c++ {
+				positions = append(positions, r*PuzzleDimension+c)
+			}
+		}
+	}
+	return positions
+}
+
+// SolveWithOrder solves using a pre-computed cell visitation order.
+// Use RowMajorPositions or NonetFirstPositions to build the order.
+func (s *Sudoku) SolveWithOrder(positions []int) bool {
+	return s.solvePositions(positions, 0, nil)
+}
+
+// TraceSolveWithOrder is like TraceSolve but uses a custom visitation order.
+func (s *Sudoku) TraceSolveWithOrder(positions []int) ([]TraceEvent, bool) {
+	events := make([]TraceEvent, 0)
+	solved := s.solvePositions(positions, 0, func(e TraceEvent) {
+		events = append(events, e)
+	})
+	return events, solved
+}
+
+func (s *Sudoku) solvePositions(positions []int, start int, record func(TraceEvent)) bool {
+	for start < len(positions) && s.puzzle[positions[start]/PuzzleDimension][positions[start]%PuzzleDimension] != 0 {
+		start++
+	}
+	if start == len(positions) {
+		solved := s.IsSolved()
+		if solved && record != nil {
+			record(TraceEvent{Type: TraceSolved})
+		}
+		return solved
+	}
+
+	row := positions[start] / PuzzleDimension
+	col := positions[start] % PuzzleDimension
+	for digit := 1; digit <= PuzzleDigits; digit++ {
+		if s.IsCandidate(row, col, digit) {
+			s.SetValue(row, col, digit)
+			if record != nil {
+				record(TraceEvent{Type: TracePlace, Row: row, Col: col, Value: digit})
+			}
+			if s.solvePositions(positions, start+1, record) {
+				return true
+			}
+			s.ClearValue(row, col)
+			if record != nil {
+				record(TraceEvent{Type: TraceBacktrack, Row: row, Col: col, Value: digit})
+			}
+		}
+	}
+	return false
+}
+
+// traceSolveWithCounts runs TraceSolveWithOrder and calls onProgress every 500
+// events with running placement and backtrack counts. Returns the full event
+// list and final counts so callers don't need to recount.
+func (s *Sudoku) traceSolveWithCounts(positions []int, onProgress func(placements, backtracks int)) ([]TraceEvent, int, int, bool) {
+	events := make([]TraceEvent, 0)
+	placements, backtracks := 0, 0
+	step := 0
+	solved := s.solvePositions(positions, 0, func(e TraceEvent) {
+		events = append(events, e)
+		switch e.Type {
+		case TracePlace:
+			placements++
+		case TraceBacktrack:
+			backtracks++
+		}
+		step++
+		if onProgress != nil && step%500 == 0 {
+			onProgress(placements, backtracks)
+		}
+	})
+	return events, placements, backtracks, solved
 }
 
 // SolutionDiff returns one description per position where expected and obtained

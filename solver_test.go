@@ -440,6 +440,145 @@ func TestSolutionDiff(t *testing.T) {
 	})
 }
 
+func TestRowMajorPositionsCoversAllCells(t *testing.T) {
+	sudoku := NewSudoku()
+	positions := sudoku.RowMajorPositions()
+	if len(positions) != PuzzleDimension*PuzzleDimension {
+		t.Fatalf("len = %d, want 81", len(positions))
+	}
+	for i, p := range positions {
+		if p != i {
+			t.Fatalf("positions[%d] = %d, want %d", i, p, i)
+		}
+	}
+}
+
+func TestNonetFirstPositionsCoversAllCells(t *testing.T) {
+	sudoku := NewSudoku()
+	if err := sudoku.Load("300401620100080400005020830057800000000700503002904007480530010203090000070006090"); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	positions := sudoku.NonetFirstPositions()
+	if len(positions) != PuzzleDimension*PuzzleDimension {
+		t.Fatalf("len = %d, want 81", len(positions))
+	}
+	seen := make(map[int]bool)
+	for _, p := range positions {
+		if seen[p] {
+			t.Fatalf("position %d appears more than once", p)
+		}
+		seen[p] = true
+	}
+}
+
+func TestNonetFirstPositionsOrdering(t *testing.T) {
+	// Puzzle with nonet (0,0) fully given (9 clues) and nonet (2,2) empty (0 clues).
+	// Row-major nonet order would visit (0,0) first anyway, but with a skewed
+	// puzzle we can verify density ordering by checking which nonet's cells appear
+	// first in the positions list.
+	sudoku := NewSudoku()
+	// Fill nonet (0,0) completely and leave nonet (2,2) empty.
+	puzzle := "123000000" +
+		"456000000" +
+		"789000000" +
+		"000000000" +
+		"000000000" +
+		"000000000" +
+		"000000000" +
+		"000000000" +
+		"000000000"
+	if err := sudoku.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	positions := sudoku.NonetFirstPositions()
+	// The first 9 positions should all be in nonet (0,0): rows 0-2, cols 0-2.
+	for i := 0; i < NonetDimension*NonetDimension; i++ {
+		row := positions[i] / PuzzleDimension
+		col := positions[i] % PuzzleDimension
+		if row >= NonetDimension || col >= NonetDimension {
+			t.Fatalf("positions[%d] = (%d,%d) is not in nonet (0,0)", i, row, col)
+		}
+	}
+	// The last 9 positions should all be in nonet (2,2): rows 6-8, cols 6-8.
+	for i := PuzzleDimension*PuzzleDimension - NonetDimension*NonetDimension; i < PuzzleDimension*PuzzleDimension; i++ {
+		row := positions[i] / PuzzleDimension
+		col := positions[i] % PuzzleDimension
+		if row < 2*NonetDimension || col < 2*NonetDimension {
+			t.Fatalf("positions[%d] = (%d,%d) is not in nonet (2,2)", i, row, col)
+		}
+	}
+}
+
+func TestSolveWithOrderRowMajorMatchesSolve(t *testing.T) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	s1, s2 := NewSudoku(), NewSudoku()
+	if err := s1.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := s2.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !s1.Solve() {
+		t.Fatal("Solve() returned false")
+	}
+	if !s2.SolveWithOrder(s2.RowMajorPositions()) {
+		t.Fatal("SolveWithOrder(RowMajorPositions) returned false")
+	}
+	if s1.Representation() != s2.Representation() {
+		t.Fatalf("solutions differ:\n  Solve:          %s\n  SolveWithOrder: %s",
+			s1.Representation(), s2.Representation())
+	}
+}
+
+func TestSolveWithOrderNonetFirstProducesValidSolution(t *testing.T) {
+	const wantSum = 45
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	sudoku := NewSudoku()
+	if err := sudoku.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !sudoku.SolveWithOrder(sudoku.NonetFirstPositions()) {
+		t.Fatal("SolveWithOrder(NonetFirstPositions) returned false")
+	}
+	for i := 0; i < PuzzleDimension; i++ {
+		if sum, _ := sudoku.RowSum(i); sum != wantSum {
+			t.Errorf("RowSum(%d) = %d, want %d", i, sum, wantSum)
+		}
+		if sum, _ := sudoku.ColumnSum(i); sum != wantSum {
+			t.Errorf("ColumnSum(%d) = %d, want %d", i, sum, wantSum)
+		}
+	}
+	for nr := 0; nr < NonetDimension; nr++ {
+		for nc := 0; nc < NonetDimension; nc++ {
+			if sum, _ := sudoku.NonetSum(nr, nc); sum != wantSum {
+				t.Errorf("NonetSum(%d,%d) = %d, want %d", nr, nc, sum, wantSum)
+			}
+		}
+	}
+}
+
+func BenchmarkSolveRowMajor(b *testing.B) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	for i := 0; i < b.N; i++ {
+		sudoku := NewSudoku()
+		if err := sudoku.Load(puzzle); err != nil {
+			b.Fatal(err)
+		}
+		sudoku.SolveWithOrder(sudoku.RowMajorPositions())
+	}
+}
+
+func BenchmarkSolveNonetFirst(b *testing.B) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	for i := 0; i < b.N; i++ {
+		sudoku := NewSudoku()
+		if err := sudoku.Load(puzzle); err != nil {
+			b.Fatal(err)
+		}
+		sudoku.SolveWithOrder(sudoku.NonetFirstPositions())
+	}
+}
+
 func TestNonetSumBounds(t *testing.T) {
 	sudoku := NewSudoku()
 

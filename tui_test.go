@@ -11,7 +11,7 @@ import (
 )
 
 func TestTUICommandCannotChangeOriginalClue(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -31,7 +31,7 @@ func TestTUICommandCannotChangeOriginalClue(t *testing.T) {
 }
 
 func TestTUICommandSetsEditableCell(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestTUICommandSetsEditableCell(t *testing.T) {
 }
 
 func TestTUIInvalidChangeKeepsCurrentEditableValue(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRenderSudokuBoardUsesDoubleNonetBordersAndSums(t *testing.T) {
 func TestCommandHelpIncludesSlashCommands(t *testing.T) {
 	help := strings.Join(commandHelpLines(), "\n")
 
-	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/trace solve", "/quit"} {
+	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/trace solve", "/strategy", "/quit"} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("help does not contain %q:\n%s", expected, help)
 		}
@@ -96,7 +96,7 @@ func TestCommandHelpIncludesSlashCommands(t *testing.T) {
 }
 
 func TestTUILogRetainsHistoryAndScrolls(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -130,7 +130,7 @@ func TestTUILogRetainsHistoryAndScrolls(t *testing.T) {
 }
 
 func TestTUICommandLogSeparatesCommandBlocks(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -149,7 +149,7 @@ func TestTUICommandLogSeparatesCommandBlocks(t *testing.T) {
 }
 
 func TestTUILayoutSwitchesWhenWideEnough(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -167,7 +167,7 @@ func TestTUILayoutSwitchesWhenWideEnough(t *testing.T) {
 }
 
 func TestTUIWideLayoutGivesLogRemainingWidthAndFullCommandWidth(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -182,7 +182,7 @@ func TestTUIWideLayoutGivesLogRemainingWidthAndFullCommandWidth(t *testing.T) {
 }
 
 func TestTUIViewLabelsPuzzlePanel(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -193,12 +193,12 @@ func TestTUIViewLabelsPuzzlePanel(t *testing.T) {
 }
 
 func TestTUITraceStepAndReset(t *testing.T) {
-	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
 
-	model.runCommand("/trace solve")
+	model = runCommandAndDrain(t, model, "/trace solve")
 	if len(model.trace) != 3 {
 		t.Fatalf("len(trace) = %d, want 3", len(model.trace))
 	}
@@ -231,13 +231,13 @@ func TestTUITraceStepAndReset(t *testing.T) {
 }
 
 func TestTUITraceSolveStartsFromOriginalPuzzle(t *testing.T) {
-	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
 	model.sudoku.SetValue(0, 8, 9)
 
-	model.runCommand("/trace solve")
+	model = runCommandAndDrain(t, model, "/trace solve")
 
 	if model.traceBase != model.original {
 		t.Fatalf("traceBase = %q, want original puzzle", model.traceBase)
@@ -248,11 +248,11 @@ func TestTUITraceSolveStartsFromOriginalPuzzle(t *testing.T) {
 }
 
 func TestTUITracePlayAdvancesOnTick(t *testing.T) {
-	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
-	model.runCommand("/trace solve")
+	model = runCommandAndDrain(t, model, "/trace solve")
 	model.runCommand("/trace play")
 
 	updated, _ := model.Update(traceTickMsg{})
@@ -267,7 +267,7 @@ func TestTUITracePlayAdvancesOnTick(t *testing.T) {
 }
 
 func TestTUITraceDelayCommand(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
@@ -282,7 +282,7 @@ func TestTUITraceDelayCommand(t *testing.T) {
 		t.Fatalf("traceDelay = %v, want 750us", model.traceDelay)
 	}
 
-	model.runCommand("/trace solve")
+	model = runCommandAndDrain(t, model, "/trace solve")
 	if status := model.traceStatus(); !strings.Contains(status, "delay=750 us") {
 		t.Fatalf("traceStatus() = %q, want delay mention", status)
 	}
@@ -290,11 +290,11 @@ func TestTUITraceDelayCommand(t *testing.T) {
 
 func TestTUITraceSaveLoadRestoresInitialPuzzle(t *testing.T) {
 	puzzle := "123456780456789123789123456214365897365897214897214365531642978642978531978531640"
-	model, err := newTUIModel(puzzle, "")
+	model, err := newTUIModel(puzzle, "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
-	model.runCommand("/trace solve")
+	model = runCommandAndDrain(t, model, "/trace solve")
 	model.runCommand("/trace next")
 
 	path := filepath.Join(t.TempDir(), "trace.jsonl")
@@ -304,7 +304,7 @@ func TestTUITraceSaveLoadRestoresInitialPuzzle(t *testing.T) {
 		t.Fatal("expected trace save to finish")
 	}
 
-	loaded, err := newTUIModel(strings.Repeat("0", 81), "")
+	loaded, err := newTUIModel(strings.Repeat("0", 81), "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel(empty) error = %v", err)
 	}
@@ -328,6 +328,62 @@ func TestTUITraceSaveLoadRestoresInitialPuzzle(t *testing.T) {
 	if value, _ := loaded.sudoku.Value(0, 8); value != 9 {
 		t.Fatalf("Value(0, 8) after loaded trace next = %d, want 9", value)
 	}
+}
+
+func TestTUIStrategyCommand(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	if model.strategy != "row-major" {
+		t.Fatalf("initial strategy = %q, want row-major", model.strategy)
+	}
+
+	model.runCommand("/strategy nonet-first")
+	if model.strategy != "nonet-first" {
+		t.Fatalf("strategy after set = %q, want nonet-first", model.strategy)
+	}
+	if !strings.Contains(strings.Join(model.logs, "\n"), "nonet-first") {
+		t.Fatal("expected log to confirm strategy change")
+	}
+
+	model.runCommand("/strategy row-major")
+	if model.strategy != "row-major" {
+		t.Fatalf("strategy after reset = %q, want row-major", model.strategy)
+	}
+
+	model.runCommand("/strategy unknown")
+	if model.strategy != "row-major" {
+		t.Fatal("unknown strategy should not change current strategy")
+	}
+}
+
+func TestTUIStrategyAffectsSolve(t *testing.T) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	expected := "398471625126385479745629831657813942914762583832954167489537216263198754571246398"
+
+	for _, strategy := range []string{"row-major", "nonet-first"} {
+		t.Run(strategy, func(t *testing.T) {
+			model, err := newTUIModel(puzzle, expected, strategy)
+			if err != nil {
+				t.Fatalf("newTUIModel() error = %v", err)
+			}
+			model = runCommandAndDrain(t, model, "/solve")
+			if !model.solved {
+				t.Fatal("expected puzzle to be solved")
+			}
+			if got := model.sudoku.Representation(); got != expected {
+				t.Fatalf("solution = %q, want %q", got, expected)
+			}
+		})
+	}
+}
+
+func runCommandAndDrain(t *testing.T, model tuiModel, command string) tuiModel {
+	t.Helper()
+	_, cmd := model.runCommandWithCmd(command)
+	return drainTUICommand(t, model, cmd)
 }
 
 func drainTUICommand(t *testing.T, model tuiModel, cmd tea.Cmd) tuiModel {

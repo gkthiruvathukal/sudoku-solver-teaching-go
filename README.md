@@ -9,9 +9,9 @@ In this implementation of Sudoku, we create a recursive solver by recursively *p
 
 In addition to having a solver, the game can be interactively played with a command line interface (CLI) or a terminal user interface (TUI) to learn how the various methods work.
 
-The unattended solver is played by `./sudoko_solver solve --puzzle <PUZZLE>` or`./sudoko_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). 
+The unattended solver is played by `./sudoku_solver solve --puzzle <PUZZLE>` or `./sudoku_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). An optional `--strategy` flag selects between `row-major` (default, left-to-right top-to-bottom) and `nonet-first` (visits nonets with the most initial clues first).
 
-The interactive solver with a command-line interfaace is played with `./sudoku_solver interactive`. Similar to the unattended solver, you can specify `--puzzle` and `--solution`.
+The interactive solver with a command-line interface is played with `./sudoku_solver interactive`. Similar to the unattended solver, you can specify `--puzzle` and `--solution`.
 
 The terminal UI is played with `./sudoku_solver tui --puzzle <PUZZLE>`. It shows the puzzle, a scrollable command log, and a command prompt in one terminal screen.
 
@@ -57,7 +57,7 @@ A particularly nicely done dataset can be found at https://www.kaggle.com/bryanp
 Here is how to test with one of the Kaggle puzzles from this dataset:
 
 ```
-$ sudoku_solver solve --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090  \
+$ sudoku_solver solve --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090 \
           --solution 398471625126385479745629831657813942914762583832954167489537216263198754571246398
 
 Puzzle:
@@ -75,6 +75,14 @@ Puzzle:
 -----------------------------------------
 (4) (3) (4) (5) (4) (3) (4) (4) (2)
 
+Nonets:
+(3) (4) (5)
+(3) (4) (3)
+(5) (4) (2)
+
+Clues: 33 total | nonets min=2 max=5 avg=3.7
+Strategy: row-major | 62 placements, 14 backtracks | 34µs | 33834
+
 Solution
 398471625126385479745629831657813942914762583832954167489537216263198754571246398
 -----------------------------------------
@@ -90,8 +98,44 @@ Solution
 -----------------------------------------
 (9) (9) (9) (9) (9) (9) (9) (9) (9)
 
-Puzzle and solution match.
+Nonets:
+(9) (9) (9)
+(9) (9) (9)
+(9) (9) (9)
+
+Solution matches expected.
 ```
+
+## Traversal Strategies
+
+The solver supports two strategies for choosing the order in which empty cells are visited. Both are correct (they always find the same valid solution), but they differ in how many placements and backtracks they require.
+
+### `row-major` (default)
+
+Visits cells left-to-right, top-to-bottom: position 0, 1, 2, … 80. This is the natural reading order and is easy to follow when teaching backtracking.
+
+### `nonet-first`
+
+Visits cells grouped by 3×3 nonet, ordering nonets from most initial clues to fewest. Within each nonet, cells are still visited in row-major order. The intuition is that denser nonets have fewer candidates per cell, so the solver prunes bad branches earlier.
+
+In practice the difference is small for typical puzzles because the entire 9×9 board fits in CPU L1 cache regardless of traversal order. Benchmarks on an Apple M2 show both strategies completing in roughly 21 µs. The pedagogical value is in comparing the placement and backtrack counts, not the wall-clock time.
+
+```
+$ sudoku_solver solve --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090 \
+          --strategy nonet-first
+
+Clues: 33 total | nonets min=2 max=5 avg=3.7
+Strategy: nonet-first | 60 placements, 12 backtracks | 32µs | 32166
+```
+
+Use the helper scripts to run comparisons across many puzzles at once:
+
+```
+$ ./go-sudoku-quick.sh        # builds binary, checks data/*-sample-*.txt
+$ ./go-sudoku.sh              # checks data/*-[a-b].txt (larger dataset, no build step)
+```
+
+Each script prints the clue statistics once per puzzle, then both strategy lines side by side, and reports which strategy had the lower nanosecond time. A summary of wins, losses, and ties is printed at the end.
 
 # Terminal UI Solver
 
@@ -99,6 +143,7 @@ The `tui` subcommand opens a full-screen terminal interface for playing and teac
 
 ```
 $ ./sudoku_solver tui --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090
+$ ./sudoku_solver tui --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090 --strategy nonet-first
 ```
 
 The TUI uses three main areas: the puzzle, the log, and the command prompt. On wide terminals, the log appears to the right of the puzzle and uses the remaining width. On narrow terminals, the log appears below the puzzle. The command prompt always spans the full available width.
@@ -170,6 +215,8 @@ Commands use the same zero-based coordinate convention as interactive mode: `x` 
 /trace delay us    Set automatic playback delay in microseconds.
 /trace save path   Save the current trace to JSONL.
 /trace load path   Load a JSONL trace and its starting puzzle.
+/strategy          Show the current traversal strategy.
+/strategy name     Switch strategy: row-major or nonet-first.
 /help              Show command help in the log.
 /quit              Exit the TUI.
 ```
@@ -522,7 +569,7 @@ Solved 1782493563541862972963754185317986244876215399625348717459621838134579626
 ## Quit
 
 This exits the interactive mode.
-Note that `quit` does not care whether you really solved the puzzleor not.
+Note that `quit` does not care whether you really solved the puzzle or not.
 However it will return whether the puzzle was solved or not to allow for proper exit.
 
 ```

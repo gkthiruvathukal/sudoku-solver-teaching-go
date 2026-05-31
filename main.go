@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/chzyer/readline"
 )
@@ -15,7 +16,7 @@ type solverConfig struct {
 	solution string
 }
 
-func commandLineSolver(puzzle string, solution string) error {
+func commandLineSolver(puzzle string, solution string, strategy string) error {
 	sudoku := NewSudoku()
 
 	if puzzle == "" {
@@ -28,7 +29,49 @@ func commandLineSolver(puzzle string, solution string) error {
 	fmt.Printf("Puzzle:\n%s\n", puzzle)
 	fmt.Print(sudoku)
 
-	if !sudoku.Solve() {
+	if digits, err := parseDigits(puzzle); err == nil {
+		total := 0
+		var nonetCounts [NonetDimension][NonetDimension]int
+		for i, d := range digits {
+			if d == 0 {
+				continue
+			}
+			total++
+			nonetCounts[i/PuzzleDimension/NonetDimension][i%PuzzleDimension/NonetDimension]++
+		}
+		minC, maxC, sumC := PuzzleDimension, 0, 0
+		for nr := 0; nr < NonetDimension; nr++ {
+			for nc := 0; nc < NonetDimension; nc++ {
+				cnt := nonetCounts[nr][nc]
+				if cnt < minC {
+					minC = cnt
+				}
+				if cnt > maxC {
+					maxC = cnt
+				}
+				sumC += cnt
+			}
+		}
+		fmt.Printf("Clues: %d total | nonets min=%d max=%d avg=%.1f\n", total, minC, maxC, float64(sumC)/9.0)
+	}
+
+	var positions []int
+	switch strategy {
+	case "nonet-first":
+		positions = sudoku.NonetFirstPositions()
+	case "row-major", "":
+		positions = sudoku.RowMajorPositions()
+	default:
+		return fmt.Errorf("unknown strategy %q: choose row-major or nonet-first", strategy)
+	}
+	start := time.Now()
+	events, placements, backtracks, solved := sudoku.traceSolveWithCounts(positions, nil)
+	elapsed := time.Since(start)
+	_ = events
+
+	fmt.Printf("Strategy: %s | %d placements, %d backtracks | %s | %d\n", strategy, placements, backtracks, elapsed.Round(time.Microsecond), elapsed.Nanoseconds())
+
+	if !solved {
 		return fmt.Errorf("no solution found for puzzle")
 	}
 
@@ -328,6 +371,7 @@ func main() {
 	subCmdFS := flag.NewFlagSet("subcommand", flag.ExitOnError)
 	puzzleFlag := subCmdFS.String("puzzle", "", "puzzle to solve (81 characters)")
 	solutionFlag := subCmdFS.String("solution", "", "expected solved puzzle (81 characters)")
+	strategyFlag := subCmdFS.String("strategy", "row-major", "traversal strategy: row-major or nonet-first")
 	journalFlag := subCmdFS.String("journal", "", "journal filename")
 
 	if len(os.Args) < 2 {
@@ -341,7 +385,7 @@ func main() {
 			if err := subCmdFS.Parse(os.Args[2:]); err != nil {
 				return err
 			}
-			return commandLineSolver(*puzzleFlag, *solutionFlag)
+			return commandLineSolver(*puzzleFlag, *solutionFlag, *strategyFlag)
 		},
 		"interactive": func() error {
 			if err := subCmdFS.Parse(os.Args[2:]); err != nil {
@@ -356,7 +400,7 @@ func main() {
 			if err := subCmdFS.Parse(os.Args[2:]); err != nil {
 				return err
 			}
-			return runSudokuTUI(*puzzleFlag, *solutionFlag)
+			return runSudokuTUI(*puzzleFlag, *solutionFlag, *strategyFlag)
 		},
 	}
 

@@ -27,6 +27,7 @@ type tuiModel struct {
 	sudoku         *Sudoku
 	original       string
 	solution       string
+	strategy       string
 	given          [PuzzleDimension][PuzzleDimension]bool
 	row            int
 	col            int
@@ -76,14 +77,32 @@ type traceLoadProgressMsg struct {
 	updates <-chan traceLoadProgressMsg
 }
 
+type quickSolveMsg struct {
+	placements int
+	backtracks int
+	finish     bool
+	solved     bool
+	result     string // Representation() of solved board, populated when finish && solved
+	updates    <-chan quickSolveMsg
+}
+
+type buildTraceMsg struct {
+	placements int
+	backtracks int
+	finish     bool
+	solved     bool
+	events     []TraceEvent
+	updates    <-chan buildTraceMsg
+}
+
 type traceFileRecord struct {
 	Record string      `json:"record"`
 	Puzzle string      `json:"puzzle,omitempty"`
 	Event  *TraceEvent `json:"event,omitempty"`
 }
 
-func runSudokuTUI(puzzle string, solution string) error {
-	model, err := newTUIModel(puzzle, solution)
+func runSudokuTUI(puzzle string, solution string, strategy string) error {
+	model, err := newTUIModel(puzzle, solution, strategy)
 	if err != nil {
 		return err
 	}
@@ -92,9 +111,16 @@ func runSudokuTUI(puzzle string, solution string) error {
 	return err
 }
 
-func newTUIModel(puzzle string, solution string) (tuiModel, error) {
+func newTUIModel(puzzle string, solution string, strategy string) (tuiModel, error) {
 	if puzzle == "" {
 		return tuiModel{}, fmt.Errorf("tui requires --puzzle")
+	}
+	switch strategy {
+	case "row-major", "":
+		strategy = "row-major"
+	case "nonet-first":
+	default:
+		return tuiModel{}, fmt.Errorf("unknown strategy %q: choose row-major or nonet-first", strategy)
 	}
 
 	sudoku := NewSudoku()
@@ -112,9 +138,10 @@ func newTUIModel(puzzle string, solution string) (tuiModel, error) {
 		sudoku:     sudoku,
 		original:   puzzle,
 		solution:   solution,
+		strategy:   strategy,
 		input:      input,
 		checkpoint: make(map[string]string),
-		logs:       []string{"Loaded puzzle. Press / for commands, arrow keys to move, digits to edit."},
+		logs:       []string{fmt.Sprintf("Loaded puzzle. Strategy: %s. Press / for commands, arrow keys to move, digits to edit.", strategy)},
 		logFollow:  true,
 		width:      80,
 		height:     24,
@@ -178,6 +205,49 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.progressActive = true
 		return m, waitTraceLoadProgress(msg.updates)
+	case quickSolveMsg:
+		m.progressDone = msg.placements + msg.backtracks
+		if !msg.finish {
+			m.progressActive = true
+			return m, waitQuickSolveMsg(msg.updates)
+		}
+		m.progressActive = false
+		if msg.solved {
+			if err := m.sudoku.Load(msg.result); err != nil {
+				m.appendLog(fmt.Sprintf("Could not apply solution: %v", err))
+			} else {
+				m.solved = true
+				m.appendLog(fmt.Sprintf("Puzzle solved (%s): %d placements, %d backtracks.", m.strategy, msg.placements, msg.backtracks))
+				if m.solution != "" && msg.result != m.solution {
+					m.appendLog("Solved puzzle does not match expected solution.")
+				}
+			}
+		} else {
+			m.appendLog("No solution based on current configuration. Try /clear.")
+		}
+		return m, nil
+	case buildTraceMsg:
+		m.progressDone = msg.placements + msg.backtracks
+		if !msg.finish {
+			m.progressActive = true
+			return m, waitBuildTraceMsg(msg.updates)
+		}
+		m.progressActive = false
+		if !msg.solved {
+			m.appendLog("Trace did not find a solution.")
+			return m, nil
+		}
+		if err := m.sudoku.Load(m.original); err != nil {
+			m.appendLog(fmt.Sprintf("Could not reset trace playback: %v", err))
+			return m, nil
+		}
+		m.traceBase = m.original
+		m.trace = msg.events
+		m.traceIndex = 0
+		m.tracePlay = false
+		m.solved = false
+		m.appendLog(fmt.Sprintf("Trace ready (%s): %d events, %d placements, %d backtracks. Use /trace next or /trace play.", m.strategy, len(msg.events), msg.placements, msg.backtracks))
+		return m, nil
 	case tea.KeyPressMsg:
 		if m.focus == commandFocus {
 			return m.updateCommand(msg)
@@ -486,6 +556,19 @@ func (m *tuiModel) setCell(row int, col int, value int) {
 	m.appendLog(fmt.Sprintf("Set (%d, %d) = %d.", row, col, value))
 }
 
+// buildPositions returns the cell visitation order for the current strategy,
+// always based on the original puzzle clues regardless of current board state.
+func (m *tuiModel) buildPositions() []int {
+	base := NewSudoku()
+	if err := base.Load(m.original); err != nil {
+		return base.RowMajorPositions()
+	}
+	if m.strategy == "nonet-first" {
+		return base.NonetFirstPositions()
+	}
+	return base.RowMajorPositions()
+}
+
 func (m *tuiModel) runCommand(commandText string) bool {
 	finished, _ := m.runCommandWithCmd(commandText)
 	return finished
@@ -529,14 +612,27 @@ func (m *tuiModel) runCommandWithCmd(commandText string) (bool, tea.Cmd) {
 		m.solved = false
 		m.appendLog("Reset to original puzzle.")
 	case "solve":
-		if m.sudoku.Solve() {
-			m.solved = true
-			m.appendLog("Puzzle solved.")
-			if m.solution != "" && m.sudoku.Representation() != m.solution {
-				m.appendLog("Solved puzzle does not match expected solution.")
-			}
-		} else {
-			m.appendLog("No solution based on current configuration. Try /clear.")
+		if m.progressActive {
+			m.appendLog("Already working. Please wait.")
+			return false, nil
+		}
+		snapshot := m.sudoku.Representation()
+		m.progressActive = true
+		m.progressLabel = fmt.Sprintf("Solving (%s)", m.strategy)
+		m.progressDone = 0
+		m.progressTotal = 0
+		return false, startQuickSolve(snapshot, m.buildPositions())
+	case "strategy":
+		if len(fields) == 1 {
+			m.appendLog(fmt.Sprintf("Current strategy: %s.", m.strategy))
+			return false, nil
+		}
+		switch fields[1] {
+		case "row-major", "nonet-first":
+			m.strategy = fields[1]
+			m.appendLog(fmt.Sprintf("Strategy set to %s.", m.strategy))
+		default:
+			m.appendLog(fmt.Sprintf("Unknown strategy %q. Choose row-major or nonet-first.", fields[1]))
 		}
 	case "status":
 		full, size := m.sudoku.IsFull()
@@ -595,7 +691,15 @@ func (m *tuiModel) runTraceCommand(args []string) tea.Cmd {
 
 	switch args[0] {
 	case "solve":
-		m.buildTrace()
+		if m.progressActive {
+			m.appendLog("Already working. Please wait.")
+			return nil
+		}
+		m.progressActive = true
+		m.progressLabel = fmt.Sprintf("Building trace (%s)", m.strategy)
+		m.progressDone = 0
+		m.progressTotal = 0
+		return startBuildTrace(m.original, m.buildPositions())
 	case "next":
 		m.tracePlay = false
 		m.stepTrace(1)
@@ -698,28 +802,83 @@ func (m *tuiModel) finishLoadTrace(path string, puzzle string, events []TraceEve
 	return nil
 }
 
-func (m *tuiModel) buildTrace() {
-	base := m.original
-	working := NewSudoku()
-	if err := working.Load(base); err != nil {
-		m.appendLog(fmt.Sprintf("Could not trace original puzzle: %v", err))
-		return
+func startQuickSolve(snapshot string, positions []int) tea.Cmd {
+	updates := make(chan quickSolveMsg, 1)
+	go func() {
+		working := NewSudoku()
+		_ = working.Load(snapshot)
+		events, placements, backtracks, solved := working.traceSolveWithCounts(positions, func(p, b int) {
+			sendQuickSolveMsg(updates, quickSolveMsg{placements: p, backtracks: b})
+		})
+		_ = events
+		result := ""
+		if solved {
+			result = working.Representation()
+		}
+		sendQuickSolveMsg(updates, quickSolveMsg{finish: true, solved: solved, result: result, placements: placements, backtracks: backtracks})
+		close(updates)
+	}()
+	return waitQuickSolveMsg(updates)
+}
+
+func startBuildTrace(original string, positions []int) tea.Cmd {
+	updates := make(chan buildTraceMsg, 1)
+	go func() {
+		working := NewSudoku()
+		_ = working.Load(original)
+		events, placements, backtracks, solved := working.traceSolveWithCounts(positions, func(p, b int) {
+			sendBuildTraceMsg(updates, buildTraceMsg{placements: p, backtracks: b})
+		})
+		sendBuildTraceMsg(updates, buildTraceMsg{finish: true, solved: solved, events: events, placements: placements, backtracks: backtracks})
+		close(updates)
+	}()
+	return waitBuildTraceMsg(updates)
+}
+
+func sendQuickSolveMsg(updates chan quickSolveMsg, msg quickSolveMsg) {
+	select {
+	case updates <- msg:
+	default:
+		select {
+		case <-updates:
+		default:
+		}
+		updates <- msg
 	}
-	events, solved := working.TraceSolve()
-	if err := m.sudoku.Load(base); err != nil {
-		m.appendLog(fmt.Sprintf("Could not reset trace playback: %v", err))
-		return
+}
+
+func waitQuickSolveMsg(updates <-chan quickSolveMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-updates
+		if !ok {
+			return quickSolveMsg{finish: true}
+		}
+		msg.updates = updates
+		return msg
 	}
-	m.traceBase = base
-	m.trace = events
-	m.traceIndex = 0
-	m.tracePlay = false
-	m.solved = false
-	if !solved {
-		m.appendLog("Trace did not find a solution.")
-		return
+}
+
+func sendBuildTraceMsg(updates chan buildTraceMsg, msg buildTraceMsg) {
+	select {
+	case updates <- msg:
+	default:
+		select {
+		case <-updates:
+		default:
+		}
+		updates <- msg
 	}
-	m.appendLog(fmt.Sprintf("Trace ready: %d events. Use /trace next or /trace play.", len(events)))
+}
+
+func waitBuildTraceMsg(updates <-chan buildTraceMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-updates
+		if !ok {
+			return buildTraceMsg{finish: true}
+		}
+		msg.updates = updates
+		return msg
+	}
 }
 
 func (m *tuiModel) stepTrace(delta int) {
@@ -826,14 +985,20 @@ func (m tuiModel) traceTick() tea.Cmd {
 }
 
 func (m tuiModel) renderTraceProgress(width int) string {
-	total := max(1, m.progressTotal)
-	done := clamp(m.progressDone, 0, total)
 	barWidth := clamp(width-34, 10, 60)
-	filled := done * barWidth / total
-	bar := strings.Repeat("=", filled) + strings.Repeat(" ", barWidth-filled)
+	var bar string
+	var done int
+	if m.progressTotal > 0 {
+		done = clamp(m.progressDone, 0, m.progressTotal)
+		filled := done * barWidth / m.progressTotal
+		bar = strings.Repeat("=", filled) + strings.Repeat(" ", barWidth-filled)
+	} else {
+		done = m.progressDone
+		bar = strings.Repeat(" ", barWidth)
+	}
 	label := m.progressLabel
 	if label == "" {
-		label = "Trace"
+		label = "Working"
 	}
 	totalText := "?"
 	if m.progressTotal > 0 {
@@ -1168,6 +1333,8 @@ func commandHelpLines() []string {
 		"/trace delay us    Set automatic trace playback delay.",
 		"/trace save path   Save the current trace to JSONL.",
 		"/trace load path   Load a JSONL trace and its starting puzzle.",
+		"/strategy          Show current traversal strategy.",
+		"/strategy name     Set strategy: row-major or nonet-first.",
 		"/help              Show this help.",
 		"/quit              Exit the TUI.",
 	}

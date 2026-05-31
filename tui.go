@@ -101,6 +101,15 @@ type traceFileRecord struct {
 	Event  *TraceEvent `json:"event,omitempty"`
 }
 
+type gameStateFile struct {
+	Version     int               `json:"version"`
+	Original    string            `json:"original"`
+	Current     string            `json:"current"`
+	Solution    string            `json:"solution,omitempty"`
+	Strategy    string            `json:"strategy"`
+	Checkpoints map[string]string `json:"checkpoints,omitempty"`
+}
+
 func runSudokuTUI(puzzle string, solution string, strategy string) error {
 	model, err := newTUIModel(puzzle, solution, strategy)
 	if err != nil {
@@ -113,7 +122,7 @@ func runSudokuTUI(puzzle string, solution string, strategy string) error {
 
 func newTUIModel(puzzle string, solution string, strategy string) (tuiModel, error) {
 	if puzzle == "" {
-		return tuiModel{}, fmt.Errorf("tui requires --puzzle")
+		puzzle = strings.Repeat("0", PuzzleDimension*PuzzleDimension)
 	}
 	switch strategy {
 	case "row-major", "":
@@ -365,6 +374,7 @@ func (m tuiModel) updateCommand(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *tuiModel) loadGivenMask(puzzle string) {
+	m.given = [PuzzleDimension][PuzzleDimension]bool{}
 	digits, err := parseDigits(puzzle)
 	if err != nil {
 		return
@@ -683,10 +693,14 @@ func (m *tuiModel) runCommandWithCmd(commandText string) (bool, tea.Cmd) {
 		}
 		sort.Strings(names)
 		m.appendLog("Checkpoints: " + strings.Join(names, ", "))
+	case "random":
+		m.randomPuzzle(fields[1:])
+	case "state":
+		m.runStateCommand(fields[1:])
 	case "trace":
 		return false, m.runTraceCommand(fields[1:])
 	case "help":
-		m.appendLog(commandHelpLines()...)
+		m.appendLog(helpLines(fields[1:])...)
 	case "quit":
 		return true, nil
 	default:
@@ -747,6 +761,62 @@ func (m *tuiModel) runTraceCommand(args []string) tea.Cmd {
 		m.appendLog(traceUsage())
 	}
 	return nil
+}
+
+func (m *tuiModel) randomPuzzle(args []string) {
+	if len(args) != 1 {
+		m.appendLog("Usage: /random easy|medium|hard")
+		return
+	}
+	puzzle, solution, err := NewRandomPuzzle(Difficulty(args[0]))
+	if err != nil {
+		m.appendLog(fmt.Sprintf("Could not generate random puzzle: %v", err))
+		return
+	}
+	if err := m.sudoku.Load(puzzle); err != nil {
+		m.appendLog(fmt.Sprintf("Generated puzzle could not be loaded: %v", err))
+		return
+	}
+	m.original = puzzle
+	m.solution = solution
+	m.checkpoint = make(map[string]string)
+	m.traceBase = ""
+	m.trace = nil
+	m.traceIndex = 0
+	m.tracePlay = false
+	m.solved = false
+	m.loadGivenMask(puzzle)
+	m.advanceToEditable()
+	_, filled := m.sudoku.IsFull()
+	m.appendLog(fmt.Sprintf("Generated %s random puzzle with %d clues.", args[0], filled))
+}
+
+func (m *tuiModel) runStateCommand(args []string) {
+	if len(args) != 2 {
+		m.appendLog("Usage: /state save|load path.json")
+		return
+	}
+	switch args[0] {
+	case "save":
+		if err := writeGameState(args[1], m.gameState()); err != nil {
+			m.appendLog(fmt.Sprintf("Could not save state: %v", err))
+			return
+		}
+		m.appendLog(fmt.Sprintf("Saved state to %s.", args[1]))
+	case "load":
+		state, err := readGameState(args[1])
+		if err != nil {
+			m.appendLog(fmt.Sprintf("Could not load state: %v", err))
+			return
+		}
+		if err := m.applyGameState(state); err != nil {
+			m.appendLog(fmt.Sprintf("Could not load state: %v", err))
+			return
+		}
+		m.appendLog(fmt.Sprintf("Loaded state from %s.", args[1]))
+	default:
+		m.appendLog("Usage: /state save|load path.json")
+	}
 }
 
 func traceUsage() string {
@@ -811,6 +881,121 @@ func (m *tuiModel) finishLoadTrace(path string, puzzle string, events []TraceEve
 	m.loadGivenMask(puzzle)
 	m.advanceToEditable()
 	m.appendLog(fmt.Sprintf("Loaded trace from %s with %d events.", path, len(events)))
+	return nil
+}
+
+func (m tuiModel) gameState() gameStateFile {
+	checkpoints := make(map[string]string, len(m.checkpoint))
+	for name, puzzle := range m.checkpoint {
+		checkpoints[name] = puzzle
+	}
+	return gameStateFile{
+		Version:     1,
+		Original:    m.original,
+		Current:     m.sudoku.Representation(),
+		Solution:    m.solution,
+		Strategy:    m.strategy,
+		Checkpoints: checkpoints,
+	}
+}
+
+func (m *tuiModel) applyGameState(state gameStateFile) error {
+	if err := validateGameState(state); err != nil {
+		return err
+	}
+	if err := m.sudoku.Load(state.Current); err != nil {
+		return fmt.Errorf("current puzzle: %w", err)
+	}
+	m.original = state.Original
+	m.solution = state.Solution
+	m.strategy = state.Strategy
+	if m.strategy == "" {
+		m.strategy = "row-major"
+	}
+	m.checkpoint = make(map[string]string, len(state.Checkpoints))
+	for name, puzzle := range state.Checkpoints {
+		m.checkpoint[name] = puzzle
+	}
+	m.traceBase = ""
+	m.trace = nil
+	m.traceIndex = 0
+	m.tracePlay = false
+	full, _ := m.sudoku.IsFull()
+	m.solved = full && m.sudoku.IsSolved()
+	m.loadGivenMask(m.original)
+	m.advanceToEditable()
+	return nil
+}
+
+func writeGameState(path string, state gameStateFile) error {
+	if err := validateGameState(state); err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(state)
+}
+
+func readGameState(path string) (gameStateFile, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return gameStateFile{}, err
+	}
+	defer file.Close()
+
+	var state gameStateFile
+	if err := json.NewDecoder(file).Decode(&state); err != nil {
+		return gameStateFile{}, err
+	}
+	return state, nil
+}
+
+func validateGameState(state gameStateFile) error {
+	if state.Version != 1 {
+		return fmt.Errorf("unsupported state version %d", state.Version)
+	}
+	if err := validatePuzzleText("original", state.Original); err != nil {
+		return err
+	}
+	if err := validatePuzzleText("current", state.Current); err != nil {
+		return err
+	}
+	if state.Solution != "" {
+		if err := validatePuzzleText("solution", state.Solution); err != nil {
+			return err
+		}
+	}
+	if ok, position, err := cluesMatch(state.Original, state.Current); err != nil {
+		return fmt.Errorf("current/original clue check: %w", err)
+	} else if !ok {
+		return fmt.Errorf("current state changed original clue at (%d, %d)", position/PuzzleDimension, position%PuzzleDimension)
+	}
+	switch state.Strategy {
+	case "", "row-major", "nonet-first":
+	default:
+		return fmt.Errorf("unknown strategy %q", state.Strategy)
+	}
+	for name, puzzle := range state.Checkpoints {
+		if err := validatePuzzleText("checkpoint "+name, puzzle); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePuzzleText(label string, puzzle string) error {
+	if _, err := parseDigits(puzzle); err != nil {
+		return fmt.Errorf("%s puzzle: %w", label, err)
+	}
+	if len(puzzle) != PuzzleDimension*PuzzleDimension {
+		return fmt.Errorf("%s puzzle: expected length %d, got %d", label, PuzzleDimension*PuzzleDimension, len(puzzle))
+	}
 	return nil
 }
 
@@ -1331,17 +1516,36 @@ func styledCell(row int, col int, text string, given bool, selected bool) string
 	return style.Render(text)
 }
 
+func helpLines(args []string) []string {
+	if len(args) > 0 && args[0] == "advanced" {
+		return advancedCommandHelpLines()
+	}
+	return commandHelpLines()
+}
+
 func commandHelpLines() []string {
 	return []string{
 		"Commands:",
 		"/set x y value     Set editable zero-based row x, column y.",
 		"/get x y           Show the value at a cell.",
 		"/clear             Reset to the original puzzle.",
-		"/solve             Solve from the current board.",
 		"/status            Show solved/full state and representation.",
 		"/save name         Save current board as a checkpoint.",
 		"/load name         Restore a checkpoint.",
 		"/checkpoints       List saved checkpoints.",
+		"/random difficulty Generate an easy, medium, or hard puzzle.",
+		"/state save path   Save original, current, solution, and checkpoints.",
+		"/state load path   Restore saved puzzle progress.",
+		"/help              Show this help.",
+		"/help advanced     Show solver, strategy, and trace commands.",
+		"/quit              Exit the TUI.",
+	}
+}
+
+func advancedCommandHelpLines() []string {
+	return []string{
+		"Advanced commands:",
+		"/solve             Solve from the current board.",
 		"/trace solve       Record recursive solve events for playback.",
 		"/trace next        Apply the next trace event.",
 		"/trace prev        Rewind one trace event.",
@@ -1354,8 +1558,7 @@ func commandHelpLines() []string {
 		"/trace load path   Load a JSONL trace and its starting puzzle.",
 		"/strategy          Show current traversal strategy.",
 		"/strategy name     Set strategy: row-major or nonet-first.",
-		"/help              Show this help.",
-		"/quit              Exit the TUI.",
+		"/help              Show basic gameplay commands.",
 	}
 }
 

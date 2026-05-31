@@ -144,6 +144,7 @@ The `tui` subcommand opens a full-screen terminal interface for playing and teac
 ```
 $ ./sudoku_solver tui --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090
 $ ./sudoku_solver tui --puzzle 300401620100080400005020830057800000000700503002904007480530010203090000070006090 --strategy nonet-first
+$ ./sudoku_solver tui
 ```
 
 The TUI uses three main areas: the puzzle, the log, and the command prompt. On wide terminals, the log appears to the right of the puzzle and uses the remaining width. On narrow terminals, the log appears below the puzzle. The command prompt always spans the full available width.
@@ -200,11 +201,22 @@ Commands use the same zero-based coordinate convention as interactive mode: `x` 
 /set x y value     Set an editable cell.
 /get x y           Show the value at a cell.
 /clear             Reset to the original puzzle.
-/solve             Solve from the current board.
 /status            Show solved/full state and board representation.
 /save name         Save current board as a checkpoint.
 /load name         Restore a checkpoint.
 /checkpoints       List saved checkpoints.
+/random difficulty Generate a random puzzle: easy, medium, or hard.
+/state save path   Save original, current, solution, strategy, checkpoints.
+/state load path   Restore saved puzzle progress.
+/help              Show basic command help in the log.
+/help advanced     Show solver, strategy, and trace commands.
+/quit              Exit the TUI.
+```
+
+Advanced help is available inside the TUI with `/help advanced`:
+
+```text
+/solve             Solve from the current board.
 /trace solve       Record recursive solve events for playback.
 /trace next        Apply the next trace event.
 /trace prev        Rewind one trace event.
@@ -217,11 +229,30 @@ Commands use the same zero-based coordinate convention as interactive mode: `x` 
 /trace load path   Load a JSONL trace and its starting puzzle.
 /strategy          Show the current traversal strategy.
 /strategy name     Switch strategy: row-major or nonet-first.
-/help              Show command help in the log.
-/quit              Exit the TUI.
 ```
 
 When commands run, the log inserts a blank line before the next command block. This makes it easier to distinguish command output while teaching or demonstrating moves.
+
+## TUI Random Puzzles and State
+
+Use `/random` to generate a new puzzle from inside the TUI:
+
+```text
+/random easy
+/random medium
+/random hard
+```
+
+Random generation creates a solved board with randomized backtracking, then keeps a balanced set of clues across the nine nonets. Easy puzzles keep 40 clues, medium puzzles keep 32 clues, and hard puzzles keep 24 clues. Generation uses a timeout so hard mode cannot loop forever; if generation fails, the current puzzle is left unchanged.
+
+The TUI can also save and restore full puzzle progress:
+
+```text
+/state save game.json
+/state load game.json
+```
+
+State files include the original puzzle, current board, solution if available, traversal strategy, and named checkpoints. Loading a state rebuilds the read-only clue mask from the saved original puzzle.
 
 ## TUI Trace Playback
 

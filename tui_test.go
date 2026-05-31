@@ -47,6 +47,46 @@ func TestTUICommandSetsEditableCell(t *testing.T) {
 	}
 }
 
+func TestTUIRandomPuzzleReplacesOriginalAndMask(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	model.runCommand("/random easy")
+
+	if model.original == "1"+strings.Repeat("0", 80) {
+		t.Fatal("expected random puzzle to replace original")
+	}
+	if len(model.solution) != PuzzleDimension*PuzzleDimension {
+		t.Fatalf("len(solution) = %d", len(model.solution))
+	}
+	if len(model.checkpoint) != 0 {
+		t.Fatal("expected random puzzle to clear checkpoints")
+	}
+	clues := 0
+	for row := 0; row < PuzzleDimension; row++ {
+		for col := 0; col < PuzzleDimension; col++ {
+			if model.given[row][col] {
+				clues++
+			}
+		}
+	}
+	if clues != 40 {
+		t.Fatalf("given clues = %d, want 40", clues)
+	}
+}
+
+func TestTUIAllowsBlankInitialPuzzleForRandomGeneration(t *testing.T) {
+	model, err := newTUIModel("", "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel(blank) error = %v", err)
+	}
+	if got := model.sudoku.Representation(); got != strings.Repeat("0", 81) {
+		t.Fatalf("initial blank puzzle = %q", got)
+	}
+}
+
 func TestTUIInvalidChangeKeepsCurrentEditableValue(t *testing.T) {
 	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
 	if err != nil {
@@ -88,9 +128,24 @@ func TestRenderSudokuBoardUsesDoubleNonetBordersAndSums(t *testing.T) {
 func TestCommandHelpIncludesSlashCommands(t *testing.T) {
 	help := strings.Join(commandHelpLines(), "\n")
 
-	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/trace solve", "/strategy", "/quit"} {
+	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/random difficulty", "/state save path", "/help advanced", "/quit"} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("help does not contain %q:\n%s", expected, help)
+		}
+	}
+	for _, unexpected := range []string{"/trace solve", "/strategy", "/solve"} {
+		if strings.Contains(help, unexpected) {
+			t.Fatalf("basic help unexpectedly contains %q:\n%s", unexpected, help)
+		}
+	}
+}
+
+func TestAdvancedHelpIncludesTraceAndStrategyCommands(t *testing.T) {
+	help := strings.Join(helpLines([]string{"advanced"}), "\n")
+
+	for _, expected := range []string{"/trace solve", "/trace play", "/strategy", "/solve"} {
+		if !strings.Contains(help, expected) {
+			t.Fatalf("advanced help does not contain %q:\n%s", expected, help)
 		}
 	}
 }
@@ -370,6 +425,44 @@ func TestTUIStrategyCommand(t *testing.T) {
 	model.runCommand("/strategy unknown")
 	if model.strategy != "row-major" {
 		t.Fatal("unknown strategy should not change current strategy")
+	}
+}
+
+func TestTUIStateSaveLoadRestoresProgress(t *testing.T) {
+	original := "100000000020000000003000000000400000000050000000006000000000700000000080000000009"
+	model, err := newTUIModel(original, strings.Repeat("1", 81), "nonet-first")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+	model.runCommand("/set 0 1 4")
+	model.runCommand("/save progress")
+
+	path := filepath.Join(t.TempDir(), "state.json")
+	model.runCommand("/state save " + path)
+
+	loaded, err := newTUIModel(strings.Repeat("0", 81), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel(empty) error = %v", err)
+	}
+	loaded.runCommand("/state load " + path)
+
+	if loaded.original != original {
+		t.Fatalf("original = %q, want %q", loaded.original, original)
+	}
+	if loaded.solution != strings.Repeat("1", 81) {
+		t.Fatal("solution was not restored")
+	}
+	if loaded.strategy != "nonet-first" {
+		t.Fatalf("strategy = %q, want nonet-first", loaded.strategy)
+	}
+	if loaded.checkpoint["progress"] == "" {
+		t.Fatal("checkpoint was not restored")
+	}
+	if value, _ := loaded.sudoku.Value(0, 1); value != 4 {
+		t.Fatalf("loaded Value(0, 1) = %d, want 4", value)
+	}
+	if !loaded.given[0][0] || loaded.given[0][1] {
+		t.Fatal("given mask was not restored from original puzzle")
 	}
 }
 

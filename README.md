@@ -160,11 +160,80 @@ Commands use the same zero-based coordinate convention as interactive mode: `x` 
 /save name         Save current board as a checkpoint.
 /load name         Restore a checkpoint.
 /checkpoints       List saved checkpoints.
+/trace solve       Record recursive solve events for playback.
+/trace next        Apply the next trace event.
+/trace prev        Rewind one trace event.
+/trace play        Play trace events automatically.
+/trace pause       Pause trace playback.
+/trace reset       Return to the trace starting board.
+/trace status      Show trace playback progress.
+/trace delay us    Set automatic playback delay in microseconds.
+/trace save path   Save the current trace to JSONL.
+/trace load path   Load a JSONL trace and its starting puzzle.
 /help              Show command help in the log.
 /quit              Exit the TUI.
 ```
 
 When commands run, the log inserts a blank line before the next command block. This makes it easier to distinguish command output while teaching or demonstrating moves.
+
+## TUI Trace Playback
+
+Trace playback shows the recursive solver one event at a time. It is useful when teaching how backtracking works: you can watch the solver place a value, follow the recursive branch, and remove the value when that branch fails.
+
+Start from the original puzzle passed with `--puzzle`, then run:
+
+```text
+/trace solve
+```
+
+This records the recursive path from the original puzzle and resets the visible puzzle to that starting point. Any manual edits made before `/trace solve` are discarded for trace playback. It does not immediately fill in the solution. The log reports how many trace events were recorded.
+
+Step through the trace manually:
+
+```text
+/trace next
+/trace next
+/trace prev
+/trace status
+```
+
+`/trace next` applies one event. `/trace prev` rewinds one event by replaying the trace from the starting board up to the previous point. The selected cell moves to the cell affected by the current event.
+
+Use automatic playback when you want the TUI to advance through events on its own:
+
+```text
+/trace play
+/trace pause
+```
+
+Automatic playback waits `1000` microseconds between events by default. Change that delay with `/trace delay`:
+
+```text
+/trace delay 500
+/trace play
+```
+
+Use `/trace reset` to return to the starting board and replay from the beginning:
+
+```text
+/trace reset
+/trace next
+```
+
+Save and load traces with JSON Lines files:
+
+```text
+/trace solve
+/trace save trace.jsonl
+/trace load trace.jsonl
+/trace play
+```
+
+The saved file includes the initial puzzle as the first record, followed by one trace event per line. Loading a trace resets the visible puzzle to the saved initial puzzle before playback, so `/trace next` and `/trace play` always start from the correct board state.
+
+Saving and loading large traces run in the background and show a progress bar above the command prompt. The TUI reports completion or errors in the log.
+
+The trace currently records the meaningful recursive actions: placing a value, backtracking from a value, and reaching a solved board. It does not record every rejected candidate.
 
 # Interactive Solver
 

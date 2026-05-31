@@ -19,6 +19,21 @@ type Sudoku struct {
 	nonet      [NonetDimension][NonetDimension]Set[int]
 }
 
+type TraceEventType string
+
+const (
+	TracePlace     TraceEventType = "place"
+	TraceBacktrack TraceEventType = "backtrack"
+	TraceSolved    TraceEventType = "solved"
+)
+
+type TraceEvent struct {
+	Type  TraceEventType `json:"type"`
+	Row   int            `json:"row,omitempty"`
+	Col   int            `json:"col,omitempty"`
+	Value int            `json:"value,omitempty"`
+}
+
 func NewSudoku() *Sudoku {
 	sudoku := new(Sudoku)
 	sudoku.Reset()
@@ -204,22 +219,43 @@ func (s *Sudoku) Load(text string) error {
 }
 
 func (s *Sudoku) Solve() bool {
-	return s.solveFrom(0, 0)
+	return s.solveFrom(0, 0, nil)
 }
 
-func (s *Sudoku) solveFrom(startRow int, startCol int) bool {
+func (s *Sudoku) TraceSolve() ([]TraceEvent, bool) {
+	events := make([]TraceEvent, 0)
+	solved := s.solveFrom(0, 0, func(event TraceEvent) {
+		events = append(events, event)
+	})
+	return events, solved
+}
+
+func (s *Sudoku) solveFrom(startRow int, startCol int, record func(TraceEvent)) bool {
 	row, col, available := s.nextEmpty(startRow, startCol)
 	if !available {
-		return s.IsSolved()
+		solved := s.IsSolved()
+		if solved && record != nil {
+			record(TraceEvent{Type: TraceSolved})
+		}
+		return solved
 	}
 
 	for digit := 1; digit <= PuzzleDigits; digit++ {
 		if s.IsCandidate(row, col, digit) {
 			s.SetValue(row, col, digit)
-			if filled, _ := s.IsFull(); filled || s.solveFrom(row, col) {
+			if record != nil {
+				record(TraceEvent{Type: TracePlace, Row: row, Col: col, Value: digit})
+			}
+			if filled, _ := s.IsFull(); filled || s.solveFrom(row, col, record) {
+				if filled && record != nil && s.IsSolved() {
+					record(TraceEvent{Type: TraceSolved})
+				}
 				return true
 			}
 			s.ClearValue(row, col)
+			if record != nil {
+				record(TraceEvent{Type: TraceBacktrack, Row: row, Col: col, Value: digit})
+			}
 		}
 	}
 	return false

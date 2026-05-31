@@ -1,8 +1,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestTUICommandCannotChangeOriginalClue(t *testing.T) {
@@ -83,7 +88,7 @@ func TestRenderSudokuBoardUsesDoubleNonetBordersAndSums(t *testing.T) {
 func TestCommandHelpIncludesSlashCommands(t *testing.T) {
 	help := strings.Join(commandHelpLines(), "\n")
 
-	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/quit"} {
+	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/trace solve", "/quit"} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("help does not contain %q:\n%s", expected, help)
 		}
@@ -184,5 +189,189 @@ func TestTUIViewLabelsPuzzlePanel(t *testing.T) {
 
 	if view := model.View().Content; !strings.Contains(view, "Puzzle") {
 		t.Fatalf("view does not contain Puzzle label:\n%s", view)
+	}
+}
+
+func TestTUITraceStepAndReset(t *testing.T) {
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	model.runCommand("/trace solve")
+	if len(model.trace) != 3 {
+		t.Fatalf("len(trace) = %d, want 3", len(model.trace))
+	}
+	if model.traceIndex != 0 {
+		t.Fatalf("traceIndex = %d, want 0", model.traceIndex)
+	}
+
+	model.runCommand("/trace next")
+	if value, _ := model.sudoku.Value(0, 8); value != 9 {
+		t.Fatalf("Value(0, 8) = %d, want 9", value)
+	}
+
+	model.runCommand("/trace next")
+	if value, _ := model.sudoku.Value(8, 8); value != 2 {
+		t.Fatalf("Value(8, 8) = %d, want 2", value)
+	}
+
+	model.runCommand("/trace prev")
+	if value, _ := model.sudoku.Value(8, 8); value != 0 {
+		t.Fatalf("Value(8, 8) after prev = %d, want 0", value)
+	}
+	if value, _ := model.sudoku.Value(0, 8); value != 9 {
+		t.Fatalf("Value(0, 8) after prev = %d, want 9", value)
+	}
+
+	model.runCommand("/trace reset")
+	if value, _ := model.sudoku.Value(0, 8); value != 0 {
+		t.Fatalf("Value(0, 8) after reset = %d, want 0", value)
+	}
+}
+
+func TestTUITraceSolveStartsFromOriginalPuzzle(t *testing.T) {
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+	model.sudoku.SetValue(0, 8, 9)
+
+	model.runCommand("/trace solve")
+
+	if model.traceBase != model.original {
+		t.Fatalf("traceBase = %q, want original puzzle", model.traceBase)
+	}
+	if value, _ := model.sudoku.Value(0, 8); value != 0 {
+		t.Fatalf("Value(0, 8) after /trace solve = %d, want original empty cell 0", value)
+	}
+}
+
+func TestTUITracePlayAdvancesOnTick(t *testing.T) {
+	model, err := newTUIModel("123456780456789123789123456214365897365897214897214365531642978642978531978531640", "")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+	model.runCommand("/trace solve")
+	model.runCommand("/trace play")
+
+	updated, _ := model.Update(traceTickMsg{})
+	model = updated.(tuiModel)
+
+	if value, _ := model.sudoku.Value(0, 8); value != 9 {
+		t.Fatalf("Value(0, 8) = %d, want 9", value)
+	}
+	if !model.tracePlay {
+		t.Fatal("expected trace playback to continue after first tick")
+	}
+}
+
+func TestTUITraceDelayCommand(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	if model.traceDelay != defaultTraceDelay {
+		t.Fatalf("traceDelay = %v, want %v", model.traceDelay, defaultTraceDelay)
+	}
+
+	model.runCommand("/trace delay 750")
+
+	if model.traceDelay != 750*time.Microsecond {
+		t.Fatalf("traceDelay = %v, want 750us", model.traceDelay)
+	}
+
+	model.runCommand("/trace solve")
+	if status := model.traceStatus(); !strings.Contains(status, "delay=750 us") {
+		t.Fatalf("traceStatus() = %q, want delay mention", status)
+	}
+}
+
+func TestTUITraceSaveLoadRestoresInitialPuzzle(t *testing.T) {
+	puzzle := "123456780456789123789123456214365897365897214897214365531642978642978531978531640"
+	model, err := newTUIModel(puzzle, "")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+	model.runCommand("/trace solve")
+	model.runCommand("/trace next")
+
+	path := filepath.Join(t.TempDir(), "trace.jsonl")
+	_, cmd := model.runCommandWithCmd("/trace save " + path)
+	model = drainTUICommand(t, model, cmd)
+	if model.progressActive {
+		t.Fatal("expected trace save to finish")
+	}
+
+	loaded, err := newTUIModel(strings.Repeat("0", 81), "")
+	if err != nil {
+		t.Fatalf("newTUIModel(empty) error = %v", err)
+	}
+	_, loadCmd := loaded.runCommandWithCmd("/trace load " + path)
+	loaded = drainTUICommand(t, loaded, loadCmd)
+
+	if loaded.traceBase != puzzle {
+		t.Fatalf("traceBase = %q, want saved puzzle", loaded.traceBase)
+	}
+	if loaded.progressActive {
+		t.Fatal("expected trace load progress to finish")
+	}
+	if got := loaded.sudoku.Representation(); got != puzzle {
+		t.Fatalf("loaded board = %q, want initial puzzle", got)
+	}
+	if len(loaded.trace) != len(model.trace) {
+		t.Fatalf("len(trace) = %d, want %d", len(loaded.trace), len(model.trace))
+	}
+
+	loaded.runCommand("/trace next")
+	if value, _ := loaded.sudoku.Value(0, 8); value != 9 {
+		t.Fatalf("Value(0, 8) after loaded trace next = %d, want 9", value)
+	}
+}
+
+func drainTUICommand(t *testing.T, model tuiModel, cmd tea.Cmd) tuiModel {
+	t.Helper()
+	for cmd != nil {
+		msg := cmd()
+		updated, next := model.Update(msg)
+		var ok bool
+		model, ok = updated.(tuiModel)
+		if !ok {
+			t.Fatalf("Update returned %T, want tuiModel", updated)
+		}
+		cmd = next
+	}
+	return model
+}
+
+func TestReadTraceFileRejectsEventBeforeInitialPuzzle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.jsonl")
+	if err := os.WriteFile(path, []byte(`{"record":"event","event":{"type":"solved"}}`+"\n"), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if _, _, err := readTraceFile(path); err == nil {
+		t.Fatal("expected readTraceFile to reject event before trace header")
+	}
+}
+
+func TestWriteTraceFileHandlesLargeTrace(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large-trace.jsonl")
+	events := make([]TraceEvent, 5000)
+	for i := range events {
+		events[i] = TraceEvent{Type: TracePlace, Row: i % PuzzleDimension, Col: (i / PuzzleDimension) % PuzzleDimension, Value: i%PuzzleDimension + 1}
+	}
+
+	if err := writeTraceFile(path, strings.Repeat("0", 81), events); err != nil {
+		t.Fatalf("writeTraceFile() error = %v", err)
+	}
+
+	_, loaded, err := readTraceFile(path)
+	if err != nil {
+		t.Fatalf("readTraceFile() error = %v", err)
+	}
+	if len(loaded) != len(events) {
+		t.Fatalf("len(loaded) = %d, want %d", len(loaded), len(events))
 	}
 }

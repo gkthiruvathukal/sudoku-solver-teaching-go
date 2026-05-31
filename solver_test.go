@@ -96,6 +96,36 @@ func TestKnownSolution(t *testing.T) {
 	}
 }
 
+func TestTraceSolveRecordsRecursiveEvents(t *testing.T) {
+	puzzle := "123456780456789123789123456214365897365897214897214365531642978642978531978531640"
+	solution := "123456789456789123789123456214365897365897214897214365531642978642978531978531642"
+	sudoku := NewSudoku()
+
+	if err := sudoku.Load(puzzle); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	events, solved := sudoku.TraceSolve()
+	if !solved {
+		t.Fatal("TraceSolve() solved = false")
+	}
+	if got := sudoku.Representation(); got != solution {
+		t.Fatalf("Representation() = %q, want %q", got, solution)
+	}
+	if len(events) != 3 {
+		t.Fatalf("len(events) = %d, want 3: %#v", len(events), events)
+	}
+	if events[0] != (TraceEvent{Type: TracePlace, Row: 0, Col: 8, Value: 9}) {
+		t.Fatalf("first event = %#v", events[0])
+	}
+	if events[1] != (TraceEvent{Type: TracePlace, Row: 8, Col: 8, Value: 2}) {
+		t.Fatalf("second event = %#v", events[1])
+	}
+	if events[2].Type != TraceSolved {
+		t.Fatalf("last event = %#v, want solved", events[2])
+	}
+}
+
 func TestIsCandidateRejectsInvalidInput(t *testing.T) {
 	sudoku := NewSudoku()
 

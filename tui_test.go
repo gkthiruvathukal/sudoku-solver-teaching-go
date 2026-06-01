@@ -105,13 +105,36 @@ func TestTUIInvalidChangeKeepsCurrentEditableValue(t *testing.T) {
 	}
 }
 
+func TestTUIMoveColorsTrackRecentAndPastMoves(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	model.runCommand("/set 0 1 2")
+	if got := model.cellMoveState(0, 1); got != recentMove {
+		t.Fatalf("cellMoveState(0, 1) = %v, want recentMove", got)
+	}
+
+	model.runCommand("/set 0 2 3")
+	if got := model.cellMoveState(0, 1); got != pastMove {
+		t.Fatalf("cellMoveState(0, 1) = %v, want pastMove", got)
+	}
+	if got := model.cellMoveState(0, 2); got != recentMove {
+		t.Fatalf("cellMoveState(0, 2) = %v, want recentMove", got)
+	}
+	if got := model.cellMoveState(0, 0); got != noMove {
+		t.Fatalf("cellMoveState(0, 0) = %v, want noMove for original clue", got)
+	}
+}
+
 func TestRenderSudokuBoardUsesDoubleNonetBordersAndSums(t *testing.T) {
 	sudoku := NewSudoku()
 	if err := sudoku.Load("123000000400000000500000000000000000000000000000000000000000000000000000000000000"); err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	board := renderSudokuBoard(sudoku, [PuzzleDimension][PuzzleDimension]bool{}, 0, 0, nil)
+	board := renderSudokuBoard(sudoku, [PuzzleDimension][PuzzleDimension]bool{}, [PuzzleDimension][PuzzleDimension]int{}, -1, -1, 0, 0, nil)
 
 	for _, expected := range []string{"╔", "╦", "╬", "╚", "║", "│", "   6", " 10"} {
 		if !strings.Contains(board, expected) {
@@ -429,12 +452,13 @@ func TestTUIStrategyCommand(t *testing.T) {
 }
 
 func TestTUIStateSaveLoadRestoresProgress(t *testing.T) {
-	original := "100000000020000000003000000000400000000050000000006000000000700000000080000000009"
-	model, err := newTUIModel(original, strings.Repeat("1", 81), "nonet-first")
+	original := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	solution := "398471625126385479745629831657813942914762583832954167489537216263198754571246398"
+	model, err := newTUIModel(original, solution, "nonet-first")
 	if err != nil {
 		t.Fatalf("newTUIModel() error = %v", err)
 	}
-	model.runCommand("/set 0 1 4")
+	model.runCommand("/set 0 1 9")
 	model.runCommand("/save progress")
 
 	path := filepath.Join(t.TempDir(), "state.json")
@@ -449,7 +473,7 @@ func TestTUIStateSaveLoadRestoresProgress(t *testing.T) {
 	if loaded.original != original {
 		t.Fatalf("original = %q, want %q", loaded.original, original)
 	}
-	if loaded.solution != strings.Repeat("1", 81) {
+	if loaded.solution != solution {
 		t.Fatal("solution was not restored")
 	}
 	if loaded.strategy != "nonet-first" {
@@ -458,8 +482,8 @@ func TestTUIStateSaveLoadRestoresProgress(t *testing.T) {
 	if loaded.checkpoint["progress"] == "" {
 		t.Fatal("checkpoint was not restored")
 	}
-	if value, _ := loaded.sudoku.Value(0, 1); value != 4 {
-		t.Fatalf("loaded Value(0, 1) = %d, want 4", value)
+	if value, _ := loaded.sudoku.Value(0, 1); value != 9 {
+		t.Fatalf("loaded Value(0, 1) = %d, want 9", value)
 	}
 	if !loaded.given[0][0] || loaded.given[0][1] {
 		t.Fatal("given mask was not restored from original puzzle")
@@ -484,6 +508,15 @@ func TestTUIStrategyAffectsSolve(t *testing.T) {
 				t.Fatalf("solution = %q, want %q", got, expected)
 			}
 		})
+	}
+}
+
+func TestNewTUIModelRejectsInvalidExpectedSolution(t *testing.T) {
+	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
+	badSolution := strings.Repeat("1", 81)
+
+	if _, err := newTUIModel(puzzle, badSolution, "row-major"); err == nil {
+		t.Fatal("expected newTUIModel to reject invalid expected solution")
 	}
 }
 

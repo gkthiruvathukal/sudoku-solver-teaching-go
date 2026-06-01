@@ -20,6 +20,11 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 	if err := sudoku.Load(puzzle); err != nil {
 		return fmt.Errorf("could not load puzzle: %w", err)
 	}
+	if solution != "" {
+		if err := ValidateSolution(puzzle, solution); err != nil {
+			return fmt.Errorf("expected solution is invalid: %w", err)
+		}
+	}
 
 	fmt.Printf("Puzzle:\n%s\n", puzzle)
 	fmt.Print(sudoku)
@@ -74,6 +79,10 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 	fmt.Printf("Solution\n%s\n", result)
 	fmt.Print(sudoku)
 
+	if err := ValidateSolution(puzzle, result); err != nil {
+		return fmt.Errorf("obtained solution is invalid: %w", err)
+	}
+
 	if solution == "" {
 		return nil
 	}
@@ -83,40 +92,7 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 		return nil
 	}
 
-	fmt.Println("Solution differs from expected; validating obtained solution...")
-
-	const wantSum = 45
-	valid := true
-	for i := 0; i < PuzzleDimension; i++ {
-		if sum, _ := sudoku.RowSum(i); sum != wantSum {
-			valid = false
-			fmt.Printf("  row %d sum = %d (want %d)\n", i, sum, wantSum)
-		}
-		if sum, _ := sudoku.ColumnSum(i); sum != wantSum {
-			valid = false
-			fmt.Printf("  col %d sum = %d (want %d)\n", i, sum, wantSum)
-		}
-	}
-	for nr := 0; nr < NonetDimension; nr++ {
-		for nc := 0; nc < NonetDimension; nc++ {
-			if sum, _ := sudoku.NonetSum(nr, nc); sum != wantSum {
-				valid = false
-				fmt.Printf("  nonet (%d,%d) sum = %d (want %d)\n", nr, nc, sum, wantSum)
-			}
-		}
-	}
-	if ok, pos, err := cluesMatch(puzzle, result); err != nil {
-		return fmt.Errorf("clue check: %w", err)
-	} else if !ok {
-		valid = false
-		fmt.Printf("  original clue at (%d,%d) was modified\n", pos/PuzzleDimension, pos%PuzzleDimension)
-	}
-
-	if valid {
-		fmt.Println("Obtained solution is valid (all constraints satisfied, clues preserved).")
-	} else {
-		fmt.Println("Obtained solution is INVALID.")
-	}
+	fmt.Println("Solution differs from expected; obtained solution is valid (all constraints satisfied, clues preserved).")
 
 	diffs, err := SolutionDiff(solution, result)
 	if err != nil {
@@ -127,9 +103,6 @@ func commandLineSolver(puzzle string, solution string, strategy string) error {
 		fmt.Println(" ", d)
 	}
 
-	if !valid {
-		return fmt.Errorf("obtained solution failed constraint checks")
-	}
 	return nil
 }
 

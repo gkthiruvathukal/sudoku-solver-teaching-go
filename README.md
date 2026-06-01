@@ -9,7 +9,7 @@ In this implementation of Sudoku, we create a recursive solver by recursively *p
 
 In addition to having a solver, the game can be interactively played with a command line interface (CLI) or a terminal user interface (TUI) to learn how the various methods work.
 
-The unattended solver is played by `./sudoku_solver solve --puzzle <PUZZLE>` or `./sudoku_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). An optional `--strategy` flag selects between `row-major` (default, left-to-right top-to-bottom) and `nonet-first` (visits nonets with the most initial clues first).
+The unattended solver is played by `./sudoku_solver solve --puzzle <PUZZLE>` or `./sudoku_solver solve --puzzle <PUZZLE> --solution <SOLUTION>` (to check against a known solution). Expected solutions are validated before use, and alternate solver results are accepted when they preserve the original clues and satisfy all row, column, and nonet constraints. An optional `--strategy` flag selects between `row-major` (default, left-to-right top-to-bottom) and `nonet-first` (visits nonets with the most initial clues first).
 
 The interactive solver with a command-line interface is played with `./sudoku_solver interactive`. Similar to the unattended solver, you can specify `--puzzle` and `--solution`.
 
@@ -252,7 +252,7 @@ The TUI can also save and restore full puzzle progress:
 /state load game.json
 ```
 
-State files include the original puzzle, current board, solution if available, traversal strategy, and named checkpoints. Loading a state rebuilds the read-only clue mask from the saved original puzzle.
+State files include the original puzzle, current board, solution if available, traversal strategy, and named checkpoints. Saved solutions are validated against the original puzzle when loading state. Loading a state rebuilds the read-only clue mask from the saved original puzzle.
 
 ## TUI Trace Playback
 

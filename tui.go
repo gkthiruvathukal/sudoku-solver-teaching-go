@@ -29,6 +29,10 @@ type tuiModel struct {
 	solution       string
 	strategy       string
 	given          [PuzzleDimension][PuzzleDimension]bool
+	moveNumber     [PuzzleDimension][PuzzleDimension]int
+	moveCounter    int
+	lastMoveRow    int
+	lastMoveCol    int
 	row            int
 	col            int
 	focus          tuiFocus
@@ -52,7 +56,15 @@ type tuiModel struct {
 	progressTotal  int
 }
 
-type cellStyle func(row int, col int, text string, given bool, selected bool) string
+type moveState int
+
+const (
+	noMove moveState = iota
+	pastMove
+	recentMove
+)
+
+type cellStyle func(row int, col int, text string, given bool, move moveState, selected bool) string
 
 type traceTickMsg struct{}
 
@@ -136,6 +148,11 @@ func newTUIModel(puzzle string, solution string, strategy string) (tuiModel, err
 	if err := sudoku.Load(puzzle); err != nil {
 		return tuiModel{}, fmt.Errorf("could not load puzzle: %w", err)
 	}
+	if solution != "" {
+		if err := ValidateSolution(puzzle, solution); err != nil {
+			return tuiModel{}, fmt.Errorf("expected solution is invalid: %w", err)
+		}
+	}
 
 	input := textinput.New()
 	input.Prompt = ""
@@ -144,17 +161,19 @@ func newTUIModel(puzzle string, solution string, strategy string) (tuiModel, err
 	input.Blur()
 
 	model := tuiModel{
-		sudoku:     sudoku,
-		original:   puzzle,
-		solution:   solution,
-		strategy:   strategy,
-		input:      input,
-		checkpoint: make(map[string]string),
-		logs:       []string{fmt.Sprintf("Loaded puzzle. Strategy: %s. Press / for commands, arrow keys to move, digits to edit.", strategy)},
-		logFollow:  true,
-		width:      80,
-		height:     24,
-		traceDelay: defaultTraceDelay,
+		sudoku:      sudoku,
+		original:    puzzle,
+		solution:    solution,
+		strategy:    strategy,
+		input:       input,
+		checkpoint:  make(map[string]string),
+		logs:        []string{fmt.Sprintf("Loaded puzzle. Strategy: %s. Press / for commands, arrow keys to move, digits to edit.", strategy)},
+		logFollow:   true,
+		width:       80,
+		height:      24,
+		traceDelay:  defaultTraceDelay,
+		lastMoveRow: -1,
+		lastMoveCol: -1,
 	}
 	model.loadGivenMask(puzzle)
 	model.advanceToEditable()
@@ -225,11 +244,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.sudoku.Load(msg.result); err != nil {
 				m.appendLog(fmt.Sprintf("Could not apply solution: %v", err))
 			} else {
+				m.rebuildMoveMarksFromCurrent(false)
 				m.solved = true
 				m.appendLog(fmt.Sprintf("Puzzle solved (%s): %d placements, %d backtracks.", m.strategy, msg.placements, msg.backtracks))
-				if m.solution != "" && msg.result != m.solution {
-					m.appendLog("Solved puzzle does not match expected solution.")
-				}
+				m.reportSolutionComparison(msg.result)
 			}
 		} else {
 			m.appendLog("No solution based on current configuration. Try /clear.")
@@ -250,6 +268,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLog(fmt.Sprintf("Could not reset trace playback: %v", err))
 			return m, nil
 		}
+		m.resetMoveMarks()
 		m.traceBase = m.original
 		m.trace = msg.events
 		m.traceIndex = 0
@@ -267,7 +286,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m tuiModel) View() tea.View {
-	board := renderSudokuBoard(m.sudoku, m.given, m.row, m.col, styledCell)
+	board := renderSudokuBoard(m.sudoku, m.given, m.moveNumber, m.lastMoveRow, m.lastMoveCol, m.row, m.col, styledCell)
 	logHeight := m.logHeight()
 	logWidth := m.logWidth()
 
@@ -389,6 +408,75 @@ func (m *tuiModel) loadGivenMask(puzzle string) {
 	}
 }
 
+func (m *tuiModel) resetMoveMarks() {
+	m.moveNumber = [PuzzleDimension][PuzzleDimension]int{}
+	m.moveCounter = 0
+	m.lastMoveRow = -1
+	m.lastMoveCol = -1
+}
+
+func (m *tuiModel) rebuildMoveMarksFromCurrent(recent bool) {
+	m.resetMoveMarks()
+	for row := 0; row < PuzzleDimension; row++ {
+		for col := 0; col < PuzzleDimension; col++ {
+			value, _ := m.sudoku.Value(row, col)
+			if value == 0 || m.given[row][col] {
+				continue
+			}
+			m.moveCounter++
+			m.moveNumber[row][col] = m.moveCounter
+		}
+	}
+	if recent {
+		m.refreshLastMove()
+	}
+}
+
+func (m *tuiModel) markMove(row int, col int) {
+	if !inBounds(row, col, PuzzleDimension) || m.given[row][col] {
+		return
+	}
+	m.moveCounter++
+	m.moveNumber[row][col] = m.moveCounter
+	m.lastMoveRow = row
+	m.lastMoveCol = col
+}
+
+func (m *tuiModel) clearMoveMark(row int, col int) {
+	if !inBounds(row, col, PuzzleDimension) {
+		return
+	}
+	m.moveNumber[row][col] = 0
+	if row == m.lastMoveRow && col == m.lastMoveCol {
+		m.refreshLastMove()
+	}
+}
+
+func (m *tuiModel) refreshLastMove() {
+	m.lastMoveRow = -1
+	m.lastMoveCol = -1
+	latest := 0
+	for row := 0; row < PuzzleDimension; row++ {
+		for col := 0; col < PuzzleDimension; col++ {
+			if m.moveNumber[row][col] > latest {
+				latest = m.moveNumber[row][col]
+				m.lastMoveRow = row
+				m.lastMoveCol = col
+			}
+		}
+	}
+}
+
+func (m tuiModel) cellMoveState(row int, col int) moveState {
+	if m.moveNumber[row][col] == 0 {
+		return noMove
+	}
+	if row == m.lastMoveRow && col == m.lastMoveCol {
+		return recentMove
+	}
+	return pastMove
+}
+
 func (m *tuiModel) appendLog(lines ...string) {
 	for _, line := range lines {
 		m.logs = append(m.logs, line)
@@ -406,6 +494,35 @@ func (m *tuiModel) appendCommandLog(commandText string) {
 		m.logs = append(m.logs, "")
 	}
 	m.appendLog(commandText)
+}
+
+func (m *tuiModel) reportSolutionComparison(result string) {
+	if err := ValidateSolution(m.original, result); err != nil {
+		m.appendLog(fmt.Sprintf("Solved puzzle is invalid: %v", err))
+		return
+	}
+	if m.solution == "" {
+		return
+	}
+	if result == m.solution {
+		m.appendLog("Solved puzzle matches expected solution.")
+		return
+	}
+
+	m.appendLog("Solved puzzle differs from expected, but is valid.")
+	diffs, err := SolutionDiff(m.solution, result)
+	if err != nil {
+		m.appendLog(fmt.Sprintf("Could not compare solutions: %v", err))
+		return
+	}
+	const maxLoggedDiffs = 20
+	for i, diff := range diffs {
+		if i == maxLoggedDiffs {
+			m.appendLog(fmt.Sprintf("... %d more difference(s).", len(diffs)-maxLoggedDiffs))
+			break
+		}
+		m.appendLog("  " + diff)
+	}
 }
 
 func (m tuiModel) renderLog(width int, height int) string {
@@ -541,6 +658,7 @@ func (m *tuiModel) clearFocusedCell() {
 		return
 	}
 	if m.sudoku.ClearValue(m.row, m.col) {
+		m.clearMoveMark(m.row, m.col)
 		m.appendLog(fmt.Sprintf("Cleared (%d, %d).", m.row, m.col))
 	}
 }
@@ -574,6 +692,7 @@ func (m *tuiModel) setCell(row int, col int, value int) {
 		return
 	}
 	m.sudoku.SetValue(row, col, value)
+	m.markMove(row, col)
 	m.solved = m.sudoku.IsSolved()
 	m.appendLog(fmt.Sprintf("Set (%d, %d) = %d.", row, col, value))
 }
@@ -631,6 +750,7 @@ func (m *tuiModel) runCommandWithCmd(commandText string) (bool, tea.Cmd) {
 			m.appendLog(fmt.Sprintf("Could not reload puzzle: %v", err))
 			return false, nil
 		}
+		m.resetMoveMarks()
 		m.solved = false
 		m.appendLog("Reset to original puzzle.")
 	case "solve":
@@ -681,6 +801,7 @@ func (m *tuiModel) runCommandWithCmd(commandText string) (bool, tea.Cmd) {
 			m.appendLog(fmt.Sprintf("Could not load checkpoint: %v", err))
 			return false, nil
 		}
+		m.rebuildMoveMarksFromCurrent(false)
 		m.appendLog(fmt.Sprintf("Loaded checkpoint %q.", fields[1]))
 	case "checkpoints":
 		if len(m.checkpoint) == 0 {
@@ -786,6 +907,7 @@ func (m *tuiModel) randomPuzzle(args []string) {
 	m.tracePlay = false
 	m.solved = false
 	m.loadGivenMask(puzzle)
+	m.resetMoveMarks()
 	m.advanceToEditable()
 	_, filled := m.sudoku.IsFull()
 	m.appendLog(fmt.Sprintf("Generated %s random puzzle with %d clues.", args[0], filled))
@@ -879,6 +1001,7 @@ func (m *tuiModel) finishLoadTrace(path string, puzzle string, events []TraceEve
 	m.tracePlay = false
 	m.solved = false
 	m.loadGivenMask(puzzle)
+	m.resetMoveMarks()
 	m.advanceToEditable()
 	m.appendLog(fmt.Sprintf("Loaded trace from %s with %d events.", path, len(events)))
 	return nil
@@ -923,6 +1046,7 @@ func (m *tuiModel) applyGameState(state gameStateFile) error {
 	full, _ := m.sudoku.IsFull()
 	m.solved = full && m.sudoku.IsSolved()
 	m.loadGivenMask(m.original)
+	m.rebuildMoveMarksFromCurrent(false)
 	m.advanceToEditable()
 	return nil
 }
@@ -967,8 +1091,8 @@ func validateGameState(state gameStateFile) error {
 		return err
 	}
 	if state.Solution != "" {
-		if err := validatePuzzleText("solution", state.Solution); err != nil {
-			return err
+		if err := ValidateSolution(state.Original, state.Solution); err != nil {
+			return fmt.Errorf("solution is invalid: %w", err)
 		}
 	}
 	if ok, position, err := cluesMatch(state.Original, state.Current); err != nil {
@@ -1125,6 +1249,7 @@ func (m *tuiModel) resetTracePlayback() {
 		m.appendLog(fmt.Sprintf("Could not reset trace playback: %v", err))
 		return
 	}
+	m.resetMoveMarks()
 	m.traceIndex = 0
 	m.solved = false
 	m.appendLog("Trace reset to starting board.")
@@ -1135,6 +1260,7 @@ func (m *tuiModel) replayTrace(count int) {
 		m.appendLog(fmt.Sprintf("Could not rewind trace: %v", err))
 		return
 	}
+	m.resetMoveMarks()
 	m.traceIndex = 0
 	m.solved = false
 	for m.traceIndex < count && m.traceIndex < len(m.trace) {
@@ -1147,10 +1273,12 @@ func (m *tuiModel) applyTraceEvent(event TraceEvent) {
 	switch event.Type {
 	case TracePlace:
 		m.sudoku.SetValue(event.Row, event.Col, event.Value)
+		m.markMove(event.Row, event.Col)
 		m.row = event.Row
 		m.col = event.Col
 	case TraceBacktrack:
 		m.sudoku.ClearValue(event.Row, event.Col)
+		m.clearMoveMark(event.Row, event.Col)
 		m.row = event.Row
 		m.col = event.Col
 	case TraceSolved:
@@ -1417,12 +1545,12 @@ func validateTraceEvent(event TraceEvent) error {
 	}
 }
 
-func renderSudokuBoard(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]bool, selectedRow int, selectedCol int, style cellStyle) string {
+func renderSudokuBoard(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]bool, moves [PuzzleDimension][PuzzleDimension]int, lastMoveRow int, lastMoveCol int, selectedRow int, selectedCol int, style cellStyle) string {
 	var builder strings.Builder
 	builder.WriteString(boardLine("top"))
 	builder.WriteByte('\n')
 	for row := 0; row < PuzzleDimension; row++ {
-		builder.WriteString(boardRow(sudoku, given, row, selectedRow, selectedCol, style))
+		builder.WriteString(boardRow(sudoku, given, moves, lastMoveRow, lastMoveCol, row, selectedRow, selectedCol, style))
 		if sum, ok := sudoku.RowSum(row); ok {
 			builder.WriteString(fmt.Sprintf("  %2d", sum))
 		}
@@ -1441,7 +1569,7 @@ func renderSudokuBoard(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]b
 	return builder.String()
 }
 
-func boardRow(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]bool, row int, selectedRow int, selectedCol int, style cellStyle) string {
+func boardRow(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]bool, moves [PuzzleDimension][PuzzleDimension]int, lastMoveRow int, lastMoveCol int, row int, selectedRow int, selectedCol int, style cellStyle) string {
 	var builder strings.Builder
 	builder.WriteString("║")
 	for col := 0; col < PuzzleDimension; col++ {
@@ -1451,7 +1579,14 @@ func boardRow(sudoku *Sudoku, given [PuzzleDimension][PuzzleDimension]bool, row 
 			text = fmt.Sprintf(" %d ", value)
 		}
 		if style != nil {
-			text = style(row, col, text, given[row][col], row == selectedRow && col == selectedCol)
+			move := noMove
+			if moves[row][col] > 0 {
+				move = pastMove
+				if row == lastMoveRow && col == lastMoveCol {
+					move = recentMove
+				}
+			}
+			text = style(row, col, text, given[row][col], move, row == selectedRow && col == selectedCol)
 		}
 		builder.WriteString(text)
 		if col == PuzzleDimension-1 {
@@ -1505,10 +1640,15 @@ func columnSumsLine(sudoku *Sudoku) string {
 	return builder.String()
 }
 
-func styledCell(row int, col int, text string, given bool, selected bool) string {
+func styledCell(row int, col int, text string, given bool, move moveState, selected bool) string {
 	style := editableCellStyle
-	if given {
+	switch {
+	case given:
 		style = givenCellStyle
+	case move == recentMove:
+		style = recentMoveCellStyle
+	case move == pastMove:
+		style = pastMoveCellStyle
 	}
 	if selected {
 		style = style.Reverse(true)
@@ -1631,6 +1771,8 @@ var (
 	logStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			Padding(0, 1)
-	givenCellStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	editableCellStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	givenCellStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	recentMoveCellStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	pastMoveCellStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	editableCellStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 )

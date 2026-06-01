@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -399,6 +400,93 @@ func SolutionDiff(expected, obtained string) ([]string, error) {
 		}
 	}
 	return diffs, nil
+}
+
+// ValidateSolution verifies that solution is complete, satisfies Sudoku
+// constraints, and preserves every clue from puzzle.
+func ValidateSolution(puzzle string, solution string) error {
+	issues, err := SolutionValidationIssues(puzzle, solution)
+	if err != nil {
+		return err
+	}
+	if len(issues) > 0 {
+		return errors.New(strings.Join(issues, "; "))
+	}
+	return nil
+}
+
+// SolutionValidationIssues returns all constraint issues found in solution.
+func SolutionValidationIssues(puzzle string, solution string) ([]string, error) {
+	puzzleDigits, err := parseDigits(puzzle)
+	if err != nil {
+		return nil, fmt.Errorf("puzzle: %w", err)
+	}
+	solutionDigits, err := parseDigits(solution)
+	if err != nil {
+		return nil, fmt.Errorf("solution: %w", err)
+	}
+	if len(puzzleDigits) != PuzzleDimension*PuzzleDimension {
+		return nil, fmt.Errorf("puzzle: expected %d digits, got %d", PuzzleDimension*PuzzleDimension, len(puzzleDigits))
+	}
+	if len(solutionDigits) != PuzzleDimension*PuzzleDimension {
+		return nil, fmt.Errorf("solution: expected %d digits, got %d", PuzzleDimension*PuzzleDimension, len(solutionDigits))
+	}
+
+	var issues []string
+	for i, digit := range solutionDigits {
+		if digit == 0 {
+			issues = append(issues, fmt.Sprintf("solution has empty cell at (%d,%d)", i/PuzzleDimension, i%PuzzleDimension))
+		}
+		if puzzleDigits[i] != 0 && puzzleDigits[i] != digit {
+			issues = append(issues, fmt.Sprintf("original clue at (%d,%d) changed from %d to %d", i/PuzzleDimension, i%PuzzleDimension, puzzleDigits[i], digit))
+		}
+	}
+
+	for row := 0; row < PuzzleDimension; row++ {
+		unit := make([]int, PuzzleDimension)
+		copy(unit, solutionDigits[row*PuzzleDimension:(row+1)*PuzzleDimension])
+		if !hasDigitsOneThroughNine(unit) {
+			issues = append(issues, fmt.Sprintf("row %d does not contain digits 1-9 exactly once", row))
+		}
+	}
+	for col := 0; col < PuzzleDimension; col++ {
+		unit := make([]int, 0, PuzzleDimension)
+		for row := 0; row < PuzzleDimension; row++ {
+			unit = append(unit, solutionDigits[row*PuzzleDimension+col])
+		}
+		if !hasDigitsOneThroughNine(unit) {
+			issues = append(issues, fmt.Sprintf("column %d does not contain digits 1-9 exactly once", col))
+		}
+	}
+	for nonetRow := 0; nonetRow < NonetDimension; nonetRow++ {
+		for nonetCol := 0; nonetCol < NonetDimension; nonetCol++ {
+			unit := make([]int, 0, PuzzleDimension)
+			for row := nonetRow * NonetDimension; row < (nonetRow+1)*NonetDimension; row++ {
+				for col := nonetCol * NonetDimension; col < (nonetCol+1)*NonetDimension; col++ {
+					unit = append(unit, solutionDigits[row*PuzzleDimension+col])
+				}
+			}
+			if !hasDigitsOneThroughNine(unit) {
+				issues = append(issues, fmt.Sprintf("nonet (%d,%d) does not contain digits 1-9 exactly once", nonetRow, nonetCol))
+			}
+		}
+	}
+
+	return issues, nil
+}
+
+func hasDigitsOneThroughNine(digits []int) bool {
+	if len(digits) != PuzzleDimension {
+		return false
+	}
+	seen := [PuzzleDimension + 1]bool{}
+	for _, digit := range digits {
+		if digit < 1 || digit > PuzzleDimension || seen[digit] {
+			return false
+		}
+		seen[digit] = true
+	}
+	return true
 }
 
 func cluesMatch(puzzle string, solution string) (bool, int, error) {

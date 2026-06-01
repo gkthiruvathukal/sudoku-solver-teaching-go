@@ -80,6 +80,40 @@ func TestCluesMatch(t *testing.T) {
 	}
 }
 
+func TestValidateSolutionAcceptsKnownSolution(t *testing.T) {
+	puzzle := "004300209005009001070060043006002087190007400050083000600000105003508690042910300"
+	solution := "864371259325849761971265843436192587198657432257483916689734125713528694542916378"
+
+	if err := ValidateSolution(puzzle, solution); err != nil {
+		t.Fatalf("ValidateSolution() error = %v", err)
+	}
+}
+
+func TestValidateSolutionRejectsInvalidSolutions(t *testing.T) {
+	puzzle := "004300209005009001070060043006002087190007400050083000600000105003508690042910300"
+	solution := "864371259325849761971265843436192587198657432257483916689734125713528694542916378"
+
+	cases := []struct {
+		name     string
+		puzzle   string
+		solution string
+	}{
+		{name: "empty cell", puzzle: puzzle, solution: solution[:10] + "0" + solution[11:]},
+		{name: "changed clue", puzzle: puzzle, solution: solution[:2] + "9" + solution[3:]},
+		{name: "duplicate row", puzzle: strings.Repeat("0", 81), solution: solution[:1] + "8" + solution[2:]},
+		{name: "wrong length", puzzle: puzzle, solution: solution[:80]},
+		{name: "invalid character", puzzle: puzzle, solution: solution[:80] + "x"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := ValidateSolution(tc.puzzle, tc.solution); err == nil {
+				t.Fatal("expected ValidateSolution to reject solution")
+			}
+		})
+	}
+}
+
 func TestKnownSolution(t *testing.T) {
 	puzzle := "300401620100080400005020830057800000000700503002904007480530010203090000070006090"
 	solution := "398471625126385479745629831657813942914762583832954167489537216263198754571246398"

@@ -885,32 +885,48 @@ func (m *tuiModel) runTraceCommand(args []string) tea.Cmd {
 }
 
 func (m *tuiModel) randomPuzzle(args []string) {
-	if len(args) != 1 {
-		m.appendLog("Usage: /random easy|medium|hard")
+	if len(args) > 1 {
+		m.appendLog(randomUsage())
 		return
 	}
-	puzzle, solution, err := NewRandomPuzzle(Difficulty(args[0]))
+	if m.progressActive {
+		m.appendLog("Already working. Please wait.")
+		return
+	}
+	var selected randomDatasetPuzzle
+	var err error
+	label := "random"
+	if len(args) == 0 {
+		selected, err = randomPuzzleFromDataDir("data")
+	} else {
+		label = args[0]
+		selected, err = randomPuzzleFromDataDirWithDifficulty("data", args[0])
+	}
 	if err != nil {
-		m.appendLog(fmt.Sprintf("Could not generate random puzzle: %v", err))
+		m.appendLog(fmt.Sprintf("Could not load random puzzle: %v", err))
 		return
 	}
-	if err := m.sudoku.Load(puzzle); err != nil {
-		m.appendLog(fmt.Sprintf("Generated puzzle could not be loaded: %v", err))
+	if err := m.sudoku.Load(selected.Puzzle); err != nil {
+		m.appendLog(fmt.Sprintf("Random puzzle could not be loaded: %v", err))
 		return
 	}
-	m.original = puzzle
-	m.solution = solution
+	m.original = selected.Puzzle
+	m.solution = selected.Solution
 	m.checkpoint = make(map[string]string)
 	m.traceBase = ""
 	m.trace = nil
 	m.traceIndex = 0
 	m.tracePlay = false
 	m.solved = false
-	m.loadGivenMask(puzzle)
+	m.loadGivenMask(selected.Puzzle)
 	m.resetMoveMarks()
 	m.advanceToEditable()
 	_, filled := m.sudoku.IsFull()
-	m.appendLog(fmt.Sprintf("Generated %s random puzzle with %d clues.", args[0], filled))
+	m.appendLog(fmt.Sprintf("Loaded %s puzzle from %s line %d with %d clues.", label, selected.File, selected.Line, filled))
+}
+
+func randomUsage() string {
+	return "Usage: /random [easy|medium|hard]"
 }
 
 func (m *tuiModel) runStateCommand(args []string) {
@@ -1673,7 +1689,7 @@ func commandHelpLines() []string {
 		"/save name         Save current board as a checkpoint.",
 		"/load name         Restore a checkpoint.",
 		"/checkpoints       List saved checkpoints.",
-		"/random difficulty Generate an easy, medium, or hard puzzle.",
+		"/random [level]    Load a random puzzle from data/.",
 		"/state save path   Save original, current, solution, and checkpoints.",
 		"/state load path   Restore saved puzzle progress.",
 		"/help              Show this help.",

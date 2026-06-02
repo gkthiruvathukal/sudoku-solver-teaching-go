@@ -47,43 +47,57 @@ func TestTUICommandSetsEditableCell(t *testing.T) {
 	}
 }
 
-func TestTUIRandomPuzzleReplacesOriginalAndMask(t *testing.T) {
-	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
-	if err != nil {
-		t.Fatalf("newTUIModel() error = %v", err)
-	}
-
-	model.runCommand("/random easy")
-
-	if model.original == "1"+strings.Repeat("0", 80) {
-		t.Fatal("expected random puzzle to replace original")
-	}
-	if len(model.solution) != PuzzleDimension*PuzzleDimension {
-		t.Fatalf("len(solution) = %d", len(model.solution))
-	}
-	if len(model.checkpoint) != 0 {
-		t.Fatal("expected random puzzle to clear checkpoints")
-	}
-	clues := 0
-	for row := 0; row < PuzzleDimension; row++ {
-		for col := 0; col < PuzzleDimension; col++ {
-			if model.given[row][col] {
-				clues++
-			}
-		}
-	}
-	if clues != 40 {
-		t.Fatalf("given clues = %d, want 40", clues)
-	}
-}
-
-func TestTUIAllowsBlankInitialPuzzleForRandomGeneration(t *testing.T) {
+func TestTUIAllowsBlankInitialPuzzle(t *testing.T) {
 	model, err := newTUIModel("", "", "row-major")
 	if err != nil {
 		t.Fatalf("newTUIModel(blank) error = %v", err)
 	}
 	if got := model.sudoku.Representation(); got != strings.Repeat("0", 81) {
 		t.Fatalf("initial blank puzzle = %q", got)
+	}
+}
+
+func TestTUIRandomPuzzleLoadsFromData(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+	model.runCommand("/set 0 1 2")
+	model.runCommand("/save progress")
+
+	model.runCommand("/random")
+
+	if model.original == "1"+strings.Repeat("0", 80) {
+		t.Fatal("expected random puzzle to replace original")
+	}
+	if err := ValidateSolution(model.original, model.solution); err != nil {
+		t.Fatalf("loaded solution is invalid: %v", err)
+	}
+	if len(model.checkpoint) != 0 {
+		t.Fatal("expected random puzzle to clear checkpoints")
+	}
+	if model.cellMoveState(0, 1) != noMove {
+		t.Fatal("expected random puzzle to clear move marks")
+	}
+	if !strings.Contains(strings.Join(model.logs, "\n"), "Loaded random puzzle from") {
+		t.Fatal("expected log to include random puzzle source")
+	}
+}
+
+func TestTUIRandomPuzzleAcceptsDifficulty(t *testing.T) {
+	model, err := newTUIModel("1"+strings.Repeat("0", 80), "", "row-major")
+	if err != nil {
+		t.Fatalf("newTUIModel() error = %v", err)
+	}
+
+	model.runCommand("/random hard")
+
+	if err := ValidateSolution(model.original, model.solution); err != nil {
+		t.Fatalf("loaded solution is invalid: %v", err)
+	}
+	_, clues := model.sudoku.IsFull()
+	if clues > 32 {
+		t.Fatalf("hard random clues = %d, want at most 32", clues)
 	}
 }
 
@@ -151,7 +165,7 @@ func TestRenderSudokuBoardUsesDoubleNonetBordersAndSums(t *testing.T) {
 func TestCommandHelpIncludesSlashCommands(t *testing.T) {
 	help := strings.Join(commandHelpLines(), "\n")
 
-	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/random difficulty", "/state save path", "/help advanced", "/quit"} {
+	for _, expected := range []string{"/set x y value", "/get x y", "/checkpoints", "/random", "/state save path", "/help advanced", "/quit"} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("help does not contain %q:\n%s", expected, help)
 		}

@@ -205,7 +205,7 @@ Commands use the same zero-based coordinate convention as interactive mode: `x` 
 /save name         Save current board as a checkpoint.
 /load name         Restore a checkpoint.
 /checkpoints       List saved checkpoints.
-/random difficulty Generate a random puzzle: easy, medium, or hard.
+/random [level]    Load a random puzzle from `data/`.
 /state save path   Save original, current, solution, strategy, checkpoints.
 /state load path   Restore saved puzzle progress.
 /help              Show basic command help in the log.
@@ -233,19 +233,13 @@ Advanced help is available inside the TUI with `/help advanced`:
 
 When commands run, the log inserts a blank line before the next command block. This makes it easier to distinguish command output while teaching or demonstrating moves.
 
-## TUI Random Puzzles and State
+## TUI Random Puzzles
 
-Use `/random` to generate a new puzzle from inside the TUI:
+Use `/random` to load a puzzle from the staged Kaggle data files in `data/`. The TUI chooses a random `sudoku-*.txt` file, then a random valid CSV row in `puzzle,solution` format. Use `/random easy`, `/random medium`, or `/random hard` to filter by clue count: easy is 35+ clues, medium is 33-34 clues, and hard is 32 or fewer clues. Loading a random puzzle replaces the original board, stores the known solution, clears checkpoints and trace state, and rebuilds the read-only clue mask.
 
-```text
-/random easy
-/random medium
-/random hard
-```
+## TUI State
 
-Random generation creates a solved board with randomized backtracking, then keeps a balanced set of clues across the nine nonets. Easy puzzles keep 40 clues, medium puzzles keep 32 clues, and hard puzzles keep 24 clues. Generation uses a timeout so hard mode cannot loop forever; if generation fails, the current puzzle is left unchanged.
-
-The TUI can also save and restore full puzzle progress:
+The TUI can save and restore full puzzle progress:
 
 ```text
 /state save game.json

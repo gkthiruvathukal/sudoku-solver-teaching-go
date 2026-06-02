@@ -1,140 +1,168 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
-type Difficulty string
-
-const (
-	DifficultyEasy   Difficulty = "easy"
-	DifficultyMedium Difficulty = "medium"
-	DifficultyHard   Difficulty = "hard"
-)
-
-type randomPuzzleConfig struct {
-	clues   int
-	timeout time.Duration
+type randomDatasetPuzzle struct {
+	Puzzle   string
+	Solution string
+	File     string
+	Line     int
+	Clues    int
 }
 
-func NewRandomPuzzle(difficulty Difficulty) (string, string, error) {
-	return NewRandomPuzzleWithTimeout(difficulty, 2*time.Second)
+func randomPuzzleFromDataDir(dataDir string) (randomDatasetPuzzle, error) {
+	return randomPuzzleFromDataDirWithFilter(dataDir, nil)
 }
 
-func NewRandomPuzzleWithTimeout(difficulty Difficulty, timeout time.Duration) (string, string, error) {
-	config, err := randomConfig(difficulty, timeout)
+func randomPuzzleFromDataDirWithDifficulty(dataDir string, difficulty string) (randomDatasetPuzzle, error) {
+	filter, err := randomDifficultyFilter(difficulty)
 	if err != nil {
-		return "", "", err
+		return randomDatasetPuzzle{}, err
+	}
+	return randomPuzzleFromDataDirWithFilter(dataDir, filter)
+}
+
+func randomPuzzleFromDataDirWithFilter(dataDir string, filter func(randomDatasetPuzzle) bool) (randomDatasetPuzzle, error) {
+	files, err := sudokuDataFiles(dataDir)
+	if err != nil {
+		return randomDatasetPuzzle{}, err
+	}
+	if len(files) == 0 {
+		return randomDatasetPuzzle{}, fmt.Errorf("no sudoku data files found in %s", dataDir)
 	}
 
-	deadline := time.Now().Add(config.timeout)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng.Shuffle(len(files), func(i int, j int) {
+		files[i], files[j] = files[j], files[i]
+	})
 
-	for time.Now().Before(deadline) {
-		solution := NewSudoku()
-		if !solution.fillRandom(solution.RowMajorPositions(), 0, rng, deadline) {
-			continue
+	var lastErr error
+	for _, file := range files {
+		puzzle, err := randomPuzzleFromDataFileWithFilter(file, rng, filter)
+		if err == nil {
+			return puzzle, nil
 		}
-		puzzle := puzzleFromSolution(solution.Representation(), config.clues, rng)
-		if puzzle == "" {
-			continue
-		}
-		return puzzle, solution.Representation(), nil
+		lastErr = err
 	}
-	return "", "", fmt.Errorf("could not generate %s puzzle within %s", difficulty, config.timeout)
+	return randomDatasetPuzzle{}, fmt.Errorf("no valid puzzle rows found in %s: %v", dataDir, lastErr)
 }
 
-func randomConfig(difficulty Difficulty, timeout time.Duration) (randomPuzzleConfig, error) {
-	if timeout <= 0 {
-		timeout = 2 * time.Second
+func sudokuDataFiles(dataDir string) ([]string, error) {
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return nil, err
 	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "sudoku-") && strings.HasSuffix(name, ".txt") {
+			files = append(files, filepath.Join(dataDir, name))
+		}
+	}
+	return files, nil
+}
+
+func randomPuzzleFromDataFile(path string, rng *rand.Rand) (randomDatasetPuzzle, error) {
+	return randomPuzzleFromDataFileWithFilter(path, rng, nil)
+}
+
+func randomPuzzleFromDataFileWithFilter(path string, rng *rand.Rand, filter func(randomDatasetPuzzle) bool) (randomDatasetPuzzle, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return randomDatasetPuzzle{}, err
+	}
+	defer file.Close()
+
+	var selected randomDatasetPuzzle
+	validRows := 0
+	lineNumber := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineNumber++
+		puzzle, solution, ok := parseDataPuzzleLine(scanner.Text())
+		if !ok {
+			continue
+		}
+		candidate := randomDatasetPuzzle{
+			Puzzle:   puzzle,
+			Solution: solution,
+			File:     path,
+			Line:     lineNumber,
+			Clues:    clueCount(puzzle),
+		}
+		if filter != nil && !filter(candidate) {
+			continue
+		}
+		validRows++
+		if rng.Intn(validRows) == 0 {
+			selected = candidate
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return randomDatasetPuzzle{}, err
+	}
+	if validRows == 0 {
+		return randomDatasetPuzzle{}, fmt.Errorf("%s has no valid puzzle rows", path)
+	}
+	return selected, nil
+}
+
+func randomDifficultyFilter(difficulty string) (func(randomDatasetPuzzle) bool, error) {
+	minClues, maxClues, err := randomDifficultyClueRange(difficulty)
+	if err != nil {
+		return nil, err
+	}
+	return func(puzzle randomDatasetPuzzle) bool {
+		return puzzle.Clues >= minClues && puzzle.Clues <= maxClues
+	}, nil
+}
+
+func randomDifficultyClueRange(difficulty string) (int, int, error) {
 	switch difficulty {
-	case DifficultyEasy:
-		return randomPuzzleConfig{clues: 40, timeout: timeout}, nil
-	case DifficultyMedium:
-		return randomPuzzleConfig{clues: 32, timeout: timeout}, nil
-	case DifficultyHard:
-		return randomPuzzleConfig{clues: 24, timeout: timeout}, nil
+	case "easy":
+		return 35, 81, nil
+	case "medium":
+		return 33, 34, nil
+	case "hard":
+		return 0, 32, nil
 	default:
-		return randomPuzzleConfig{}, fmt.Errorf("unknown difficulty %q: choose easy, medium, or hard", difficulty)
+		return 0, 0, fmt.Errorf("unknown random difficulty %q: choose easy, medium, or hard", difficulty)
 	}
 }
 
-func (s *Sudoku) fillRandom(positions []int, start int, rng *rand.Rand, deadline time.Time) bool {
-	if time.Now().After(deadline) {
-		return false
-	}
-	for start < len(positions) && s.puzzle[positions[start]/PuzzleDimension][positions[start]%PuzzleDimension] != 0 {
-		start++
-	}
-	if start == len(positions) {
-		return s.IsSolved()
-	}
-
-	row := positions[start] / PuzzleDimension
-	col := positions[start] % PuzzleDimension
-	digits := rng.Perm(PuzzleDimension)
-	for _, digit := range digits {
-		value := digit + 1
-		if s.IsCandidate(row, col, value) {
-			s.SetValue(row, col, value)
-			if s.fillRandom(positions, start+1, rng, deadline) {
-				return true
-			}
-			s.ClearValue(row, col)
+func clueCount(puzzle string) int {
+	clues := 0
+	for _, digit := range puzzle {
+		if digit != '0' {
+			clues++
 		}
 	}
-	return false
+	return clues
 }
 
-func puzzleFromSolution(solution string, clues int, rng *rand.Rand) string {
-	if len(solution) != PuzzleDimension*PuzzleDimension {
-		return ""
+func parseDataPuzzleLine(line string) (string, string, bool) {
+	parts := strings.Split(strings.TrimSpace(line), ",")
+	if len(parts) != 2 {
+		return "", "", false
 	}
-
-	counts := distributedNonetClueCounts(clues, rng)
-	puzzle := make([]byte, len(solution))
-	for i := range puzzle {
-		puzzle[i] = '0'
+	puzzle := strings.TrimSpace(parts[0])
+	solution := strings.TrimSpace(parts[1])
+	if err := validatePuzzleText("puzzle", puzzle); err != nil {
+		return "", "", false
 	}
-
-	for nonet := 0; nonet < PuzzleDimension; nonet++ {
-		positions := positionsForNonet(nonet)
-		rng.Shuffle(len(positions), func(i int, j int) {
-			positions[i], positions[j] = positions[j], positions[i]
-		})
-		for i := 0; i < counts[nonet]; i++ {
-			position := positions[i]
-			puzzle[position] = solution[position]
-		}
+	if err := ValidateSolution(puzzle, solution); err != nil {
+		return "", "", false
 	}
-	return string(puzzle)
-}
-
-func distributedNonetClueCounts(clues int, rng *rand.Rand) [PuzzleDimension]int {
-	base := clues / PuzzleDimension
-	remainder := clues % PuzzleDimension
-	var counts [PuzzleDimension]int
-	for i := range counts {
-		counts[i] = base
-	}
-	order := rng.Perm(PuzzleDimension)
-	for i := 0; i < remainder; i++ {
-		counts[order[i]]++
-	}
-	return counts
-}
-
-func positionsForNonet(nonet int) []int {
-	positions := make([]int, 0, PuzzleDimension)
-	startRow := (nonet / NonetDimension) * NonetDimension
-	startCol := (nonet % NonetDimension) * NonetDimension
-	for row := startRow; row < startRow+NonetDimension; row++ {
-		for col := startCol; col < startCol+NonetDimension; col++ {
-			positions = append(positions, row*PuzzleDimension+col)
-		}
-	}
-	return positions
+	return puzzle, solution, true
 }
